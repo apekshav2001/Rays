@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Reactive Mandelbulb & Particles</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        canvas { display: block; }
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.8); color: white; flex-direction: column;
+            cursor: pointer; z-index: 10; transition: opacity 0.5s;
+        }
+        h1 { margin: 0 0 10px 0; letter-spacing: 2px; text-transform: uppercase; }
+        p { color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <h1 id="overlay-title">Loading System...</h1>
+    <p id="overlay-subtitle">Please wait while resources are being fetched...</p>
+</div>
+
+<div id="debug-panel" style="position: absolute; bottom: 20px; left: 20px; color: white; font-family: monospace; z-index: 5; pointer-events: none;">
+    <div>Status: <span id="mic-status">Waiting for click...</span></div>
+    <div>Device: <span id="mic-name">Unknown</span></div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <span>Vol:</span>
+        <div style="width: 150px; height: 10px; border: 1px solid #555; background: #222;">
+            <div id="volume-bar" style="width: 0%; height: 100%; background: #0f0; transition: width 0.05s;"></div>
+        </div>
+    </div>
+    <div id="windows-hint" style="color: #ffaa00; display: none; margin-top: 5px; font-size: 12px;">
+        Hint: Check Windows Privacy Settings > Microphone
+    </div>
+</div>
+
+<!-- Error Handler to show issues on screen -->
+<script>
+    window.addEventListener('error', function(e) {
+        const title = document.getElementById('overlay-title');
+        const subtitle = document.getElementById('overlay-subtitle');
+        if(title) {
+            title.innerText = 'Error Loading';
+            title.style.color = '#ff5555';
+            // If it's an event (like resource load error), use a generic message
+            subtitle.innerText = e.message || "Failed to load scripts. Check internet connection.";
+        }
+    }, true); // Capture phase to catch resource errors
+</script>
+
+<!-- Import Map for Three.js and Post Processing -->
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    // --- CONFIGURATION ---
+    const PARTICLE_COUNT = 12000;
+    
+    // --- GLOBALS ---
+    let camera, scene, renderer, composer;
+    let fractalMesh, particleSystem;
+    let analyser, dataArray;
+    let audioUniforms = { 
+        uAudioLow: { value: 0.0 }, 
+        uAudioMid: { value: 0.0 }, 
+        uAudioHigh: { value: 0.0 },
+        uAudioTotal: { value: 0.0 }
+    };
+    const clock = new THREE.Clock();
+
+    // --- SHADERS ---
+
+    // 1. Raymarching Mandelbulb Fragment Shader
+    const fractalVertexShader = `
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        void main() {
+            vUv = uv;
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    const fractalFragmentShader = `
+        uniform float uTime;
+        uniform vec2 uResolution;
+        uniform float uAudioTotal;
+        uniform float uAudioLow;
+        
+        varying vec2 vUv;
+        varying vec3 vPosition;
+
+        // Mandelbulb Distance Estimator
+        float map(vec3 p) {
+            vec3 w = p;
+            float m = dot(w,w);
+            vec3 dz = vec3(1.0, 0.0, 0.0); // derivative
+            
+            float dzlen = 1.0;
+            float r = 0.0;
+            float dr = 1.0;
+            
+            // Modulate power with bass
+            float power = 8.0 + (uAudioLow * 4.0); 
+
+            for(int i=0; i<8; i++) {
+                r = length(w);
+                if(r > 2.0) break;
+                
+                // Convert to polar coordinates
+                float theta = acos(w.z/r);
+                float phi = atan(w.y, w.x);
+                dr = pow(r, power-1.0)*power*dr + 1.0;
+                
+                // Scale and rotate
+                float zr = pow(r, power);
+                theta = theta * power + uTime * 0.1; // Rotate internals
+                phi = phi * power;
+                
+                // Convert back to cartesian
+                w = zr * vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
+                w += p;
+            }
+            return 0.5 * log(r) * r / dr;
+        }
+
+        vec3 getNormal(vec3 p) {
+            float d = map(p);
+            vec2 e = vec2(0.001, 0.0);
+            return normalize(vec3(
+                map(p+e.xyy) - map(p-e.xyy),
+                map(p+e.yxy) - map(p-e.yxy),
+                map(p+e.yyx) - map(p-e.yyx)
+            ));
+        }
+
+        void main() {
+            // Camera ray setup (simplified for object space rendering)
+            vec3 viewDir = normalize(vPosition - cameraPosition); 
+            // Since we render on a cube, we raymarch from the cube surface inwards?
+            // Actually simpler to just render in object space of the box
+            
+            vec3 ro = vPosition * 1.5; // Start slightly outside
+            vec3 rd = normalize(-vPosition); // Look inward (hacky for box)
+            
+            // Better approach for contained shader: View direction relative to camera
+            ro = cameraPosition; 
+            rd = normalize(vPosition - cameraPosition);
+
+            float t = 0.0;
+            float d = 0.0;
+            int steps = 0;
+            
+            // Raymarching Loop
+            for(int i=0; i<64; i++) {
+                vec3 p = ro + rd * t;
+                d = map(p);
+                if(d < 0.002 || t > 10.0) break;
+                t += d;
+                steps = i;
+            }
+
+            vec3 color = vec3(0.0);
+            
+            if(t < 10.0) {
+                vec3 p = ro + rd * t;
+                vec3 normal = getNormal(p);
+                
+                // Coloring based on orbit/normal/audio
+                vec3 baseColor = vec3(0.1, 0.6, 0.9);
+                baseColor = mix(baseColor, vec3(1.0, 0.2, 0.4), uAudioLow); // Red on Bass
+                
+                // Simple lighting
+                float light = max(dot(normal, vec3(0.5, 0.8, 0.5)), 0.0);
+                float rim = pow(1.0 - max(dot(normal, -rd), 0.0), 3.0);
+                
+                color = baseColor * (light * 0.5 + 0.2) + rim * 2.0;
+                
+                // AO-like darkness in crevices (based on steps)
+                color *= (1.0 - float(steps)/64.0);
+            } else {
+                discard; // Let particles show behind
+            }
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+    `;
+
+    // 2. Particle Vertex Shader
+    const particleVertexShader = `
+        uniform float uTime;
+        uniform float uAudioTotal;
+        attribute float aScale;
+        attribute vec3 aRandom;
+        
+        varying vec3 vColor;
+
+        void main() {
+            vec3 pos = position;
+            
+            // Orbit logic
+            float angle = uTime * 0.2 + aRandom.x * 6.28;
+            float radius = 2.5 + aRandom.y * 1.5 + (uAudioTotal * 0.5);
+            
+            // Swirling motion
+            float c = cos(angle);
+            float s = sin(angle);
+            
+            pos.x = c * radius;
+            pos.z = s * radius;
+            pos.y = (aRandom.z - 0.5) * 4.0 + sin(uTime + aRandom.x * 10.0) * 0.5;
+
+            // Audio reaction: explode outward slightly
+            pos += normalize(pos) * uAudioTotal * aRandom.x;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            
+            gl_Position = projectionMatrix * mvPosition;
+            
+            // Size attenuation
+            gl_PointSize = (4.0 * aScale + uAudioTotal * 5.0) * (30.0 / -mvPosition.z);
+            
+            // Color variation
+            vColor = mix(vec3(0.2, 0.5, 1.0), vec3(1.0, 0.8, 0.4), uAudioTotal + aRandom.x);
+        }
+    `;
+
+    const particleFragmentShader = `
+        varying vec3 vColor;
+        void main() {
+            // Circular particle
+            vec2 uv = gl_PointCoord.xy - 0.5;
+            float r = length(uv);
+            if(r > 0.5) discard;
+            
+            // Soft glow
+            float glow = 1.0 - (r * 2.0);
+            glow = pow(glow, 2.0);
+            
+            gl_FragColor = vec4(vColor, glow);
+        }
+    `;
+
+
+    // --- SETUP FUNCTION ---
+    function init() {
+        const overlay = document.getElementById('overlay');
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 500);
+
+        // 1. Audio Setup
+        setupAudio();
+
+        // 2. Three.js Scene
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.05);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 6);
+
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 3. Mandelbulb Object (Raymarching Proxy)
+        // We use a box that encompasses the area where the fractal exists
+        const boxGeo = new THREE.BoxGeometry(4, 4, 4); 
+        // We need to render the back faces or handle culling carefully, 
+        // but for a centered fractal, a standard material approach works if logic is right.
+        // Actually, simpler: Render a Sphere and raymarch inside it.
+        const sphereGeo = new THREE.SphereGeometry(3, 32, 32); 
+
+        const fractalMat = new THREE.ShaderMaterial({
+            vertexShader: fractalVertexShader,
+            fragmentShader: fractalFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uAudioTotal: audioUniforms.uAudioTotal,
+                uAudioLow: audioUniforms.uAudioLow
+            },
+            side: THREE.DoubleSide,
+            transparent: true // Allow discarding background
+        });
+
+        // fractalMesh = new THREE.Mesh(sphereGeo, fractalMat);
+        // scene.add(fractalMesh);
+
+        // 4. Particle System
+        const particlesGeo = new THREE.BufferGeometry();
+        const positions = [];
+        const scales = [];
+        const randoms = [];
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            positions.push(0, 0, 0); // Positions calculated in vertex shader
+            scales.push(Math.random());
+            randoms.push(Math.random(), Math.random(), Math.random());
+        }
+
+        particlesGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        particlesGeo.setAttribute('aScale', new THREE.Float32BufferAttribute(scales, 1));
+        particlesGeo.setAttribute('aRandom', new THREE.Float32BufferAttribute(randoms, 3));
+
+        const particlesMat = new THREE.ShaderMaterial({
+            vertexShader: particleVertexShader,
+            fragmentShader: particleFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uAudioTotal: audioUniforms.uAudioTotal
+            },
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        particleSystem = new THREE.Points(particlesGeo, particlesMat);
+        scene.add(particleSystem);
+
+        // 5. Post Processing (Unreal Bloom)
+        const renderScene = new RenderPass(scene, camera);
+        
+        // Resolution, Strength, Radius, Threshold
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.strength = 1.2;
+        bloomPass.radius = 0.5;
+        bloomPass.threshold = 0.1;
+
+        composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // Event Listeners
+        window.addEventListener('resize', onWindowResize);
+        
+        animate();
+    }
+
+    async function setupAudio() {
+        const status = document.getElementById('mic-status');
+        const nameDisplay = document.getElementById('mic-name');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Display Device Name
+            const track = stream.getAudioTracks()[0];
+            nameDisplay.innerText = track.label || "Default Audio Device";
+            
+            status.innerText = "Active";
+            status.style.color = "#0f0";
+            
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Ensure context is running
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
+            const source = audioCtx.createMediaStreamSource(stream);
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+        } catch (err) {
+            console.error("Microphone access denied or error:", err);
+            status.innerText = "Denied/Error";
+            status.style.color = "#f00";
+            alert("Microphone access is needed for audio reactivity.");
+        }
+    }
+
+    function updateAudio() {
+        if (!analyser) return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume for different bands
+        let low = 0, mid = 0, high = 0, total = 0;
+        const binCount = analyser.frequencyBinCount;
+        
+        // Simple slicing for bands
+        for(let i = 0; i < binCount; i++) {
+            let val = dataArray[i] / 255.0;
+            total += val;
+            if(i < binCount/3) low += val;
+            else if(i < 2*binCount/3) mid += val;
+            else high += val;
+        }
+
+        // Update Debug Bar
+        const avgVolume = total / binCount;
+        const bar = document.getElementById('volume-bar');
+        if(bar) bar.style.width = Math.min(100, avgVolume * 400) + '%'; 
+
+        // Show hint if volume is consistently 0
+        if (avgVolume === 0 && audioUniforms.uAudioTotal.value === 0) {
+             const hint = document.getElementById('windows-hint');
+             if(hint) hint.style.display = 'block';
+        } else {
+             const hint = document.getElementById('windows-hint');
+             if(hint) hint.style.display = 'none';
+        }
+
+        audioUniforms.uAudioTotal.value = THREE.MathUtils.lerp(audioUniforms.uAudioTotal.value, total / binCount * 4.0, 0.1);
+        audioUniforms.uAudioLow.value = THREE.MathUtils.lerp(audioUniforms.uAudioLow.value, low / (binCount/3) * 2.0, 0.1);
+        audioUniforms.uAudioHigh.value = THREE.MathUtils.lerp(audioUniforms.uAudioHigh.value, high / (binCount/3) * 2.0, 0.1);
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+        if(fractalMesh) fractalMesh.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const time = clock.getElapsedTime();
+        updateAudio();
+
+        if (fractalMesh) {
+            fractalMesh.material.uniforms.uTime.value = time;
+            // Slowly rotate the container box to view angles
+            fractalMesh.rotation.y = time * 0.1; 
+            fractalMesh.rotation.z = time * 0.05;
+        }
+
+        if (particleSystem) {
+            particleSystem.material.uniforms.uTime.value = time;
+        }
+
+        composer.render();
+    }
+
+    // Start interaction
+    const title = document.getElementById('overlay-title');
+    const subtitle = document.getElementById('overlay-subtitle');
+    
+    // If we reached here, modules are loaded
+    title.innerText = 'Initialize System';
+    subtitle.innerText = 'Click to enable Microphone & Rendering';
+    
+    document.getElementById('overlay').addEventListener('click', init);
+
+</script>
+</body>
+</html>
