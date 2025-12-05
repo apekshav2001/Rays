@@ -38,7 +38,6 @@
     </div>
 </div>
 
-<!-- Error Handler to show issues on screen -->
 <script>
     window.addEventListener('error', function(e) {
         const title = document.getElementById('overlay-title');
@@ -46,13 +45,11 @@
         if(title) {
             title.innerText = 'Error Loading';
             title.style.color = '#ff5555';
-            // If it's an event (like resource load error), use a generic message
             subtitle.innerText = e.message || "Failed to load scripts. Check internet connection.";
         }
-    }, true); // Capture phase to catch resource errors
+    }, true);
 </script>
 
-<!-- Import Map for Three.js and Post Processing -->
 <script type="importmap">
     {
         "imports": {
@@ -68,14 +65,28 @@
     import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
     import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
     import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
     // --- CONFIGURATION ---
-    const PARTICLE_COUNT = 12000;
+    const PARTICLE_COUNT = 15000;
     
     // --- GLOBALS ---
     let camera, scene, renderer, composer;
     let fractalMesh, particleSystem;
     let analyser, dataArray;
+    
+    // FIX 1: Defined customTime here in the global scope
+    let customTime = 0; 
+
+    const params = {
+        color1: '#3380ff', // Blue
+        color2: '#ffcc66', // Gold
+        baseSize: 3.0,
+        speed: 0.2,        // Movement speed
+        audioStrength: 1.0, // 0 = Off, 1 = Normal
+        bloomStrength: 1.2
+    };
+
     let audioUniforms = { 
         uAudioLow: { value: 0.0 }, 
         uAudioMid: { value: 0.0 }, 
@@ -86,7 +97,6 @@
 
     // --- SHADERS ---
 
-    // 1. Raymarching Mandelbulb Fragment Shader
     const fractalVertexShader = `
         varying vec2 vUv;
         varying vec3 vPosition;
@@ -106,34 +116,23 @@
         varying vec2 vUv;
         varying vec3 vPosition;
 
-        // Mandelbulb Distance Estimator
         float map(vec3 p) {
             vec3 w = p;
             float m = dot(w,w);
-            vec3 dz = vec3(1.0, 0.0, 0.0); // derivative
-            
             float dzlen = 1.0;
             float r = 0.0;
             float dr = 1.0;
-            
-            // Modulate power with bass
             float power = 8.0 + (uAudioLow * 4.0); 
 
             for(int i=0; i<8; i++) {
                 r = length(w);
                 if(r > 2.0) break;
-                
-                // Convert to polar coordinates
                 float theta = acos(w.z/r);
                 float phi = atan(w.y, w.x);
                 dr = pow(r, power-1.0)*power*dr + 1.0;
-                
-                // Scale and rotate
                 float zr = pow(r, power);
-                theta = theta * power + uTime * 0.1; // Rotate internals
+                theta = theta * power + uTime * 0.1;
                 phi = phi * power;
-                
-                // Convert back to cartesian
                 w = zr * vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
                 w += p;
             }
@@ -151,23 +150,13 @@
         }
 
         void main() {
-            // Camera ray setup (simplified for object space rendering)
-            vec3 viewDir = normalize(vPosition - cameraPosition); 
-            // Since we render on a cube, we raymarch from the cube surface inwards?
-            // Actually simpler to just render in object space of the box
-            
-            vec3 ro = vPosition * 1.5; // Start slightly outside
-            vec3 rd = normalize(-vPosition); // Look inward (hacky for box)
-            
-            // Better approach for contained shader: View direction relative to camera
-            ro = cameraPosition; 
-            rd = normalize(vPosition - cameraPosition);
+            vec3 ro = cameraPosition; 
+            vec3 rd = normalize(vPosition - cameraPosition);
 
             float t = 0.0;
             float d = 0.0;
             int steps = 0;
             
-            // Raymarching Loop
             for(int i=0; i<64; i++) {
                 vec3 p = ro + rd * t;
                 d = map(p);
@@ -177,35 +166,30 @@
             }
 
             vec3 color = vec3(0.0);
-            
             if(t < 10.0) {
                 vec3 p = ro + rd * t;
                 vec3 normal = getNormal(p);
-                
-                // Coloring based on orbit/normal/audio
                 vec3 baseColor = vec3(0.1, 0.6, 0.9);
-                baseColor = mix(baseColor, vec3(1.0, 0.2, 0.4), uAudioLow); // Red on Bass
-                
-                // Simple lighting
+                baseColor = mix(baseColor, vec3(1.0, 0.2, 0.4), uAudioLow); 
                 float light = max(dot(normal, vec3(0.5, 0.8, 0.5)), 0.0);
                 float rim = pow(1.0 - max(dot(normal, -rd), 0.0), 3.0);
-                
                 color = baseColor * (light * 0.5 + 0.2) + rim * 2.0;
-                
-                // AO-like darkness in crevices (based on steps)
                 color *= (1.0 - float(steps)/64.0);
             } else {
-                discard; // Let particles show behind
+                discard;
             }
-
             gl_FragColor = vec4(color, 1.0);
         }
     `;
 
-    // 2. Particle Vertex Shader
     const particleVertexShader = `
         uniform float uTime;
         uniform float uAudioTotal;
+        uniform vec3 uColorA;
+        uniform vec3 uColorB;
+        uniform float uSizeMult;
+        uniform float uAudioStrength;
+
         attribute float aScale;
         attribute vec3 aRandom;
         
@@ -213,63 +197,46 @@
 
         void main() {
             vec3 pos = position;
-            
-            // --- UPDATED LOGIC FOR FULL SCREEN COVERAGE ---
-            
-            // 1. Create a large Box/Cloud distribution instead of a narrow Cylinder
-            // Range: X (-15 to +15), Y (-10 to +10), Z (-10 to +10)
-            float spreadX = 30.0; 
-            float spreadY = 20.0;
+            float spreadX = 40.0; 
+            float spreadY = 25.0;
             float spreadZ = 20.0;
 
             vec3 initialPos;
             initialPos.x = (aRandom.x - 0.5) * spreadX;
             initialPos.y = (aRandom.y - 0.5) * spreadY;
-            // Push z back slightly so particles don't clip into camera too much
             initialPos.z = (aRandom.z - 0.5) * spreadZ - 2.0; 
 
-            // 2. Apply Swirling Rotation to the cloud (Galactic rotation)
-            // Slower rotation further out for a natural feel
-            float angle = uTime * 0.1 + aRandom.x * 2.0;
+            float angle = uTime * 0.5 + aRandom.x * 2.0;
             float c = cos(angle);
             float s = sin(angle);
 
-            // Rotate around Y axis
             pos.x = initialPos.x * c - initialPos.z * s;
             pos.z = initialPos.x * s + initialPos.z * c;
-            pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5; // Gentle float
+            pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
 
-            // 3. Audio reaction: Push particles outward based on volume
-            // We use normalize(pos) so they push away from center
-            pos += normalize(pos) * uAudioTotal * 2.0 * aRandom.y;
+            pos += normalize(pos) * uAudioTotal * 2.0 * aRandom.y * uAudioStrength;
 
             vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mvPosition;
             
-            // Size attenuation (Keep them visible but not too huge)
-            gl_PointSize = (3.0 * aScale + uAudioTotal * 3.0) * (30.0 / -mvPosition.z);
+            float audioSize = (uAudioTotal * 3.0) * uAudioStrength;
+            gl_PointSize = (uSizeMult * aScale + audioSize) * (30.0 / -mvPosition.z);
             
-            // Color variation
-            vColor = mix(vec3(0.1, 0.4, 0.9), vec3(1.0, 0.9, 0.5), uAudioTotal + aRandom.x);
+            float mixVal = (uAudioTotal * uAudioStrength * 0.5) + aRandom.x;
+            vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
         }
     `;
-
     const particleFragmentShader = `
         varying vec3 vColor;
         void main() {
-            // Circular particle
             vec2 uv = gl_PointCoord.xy - 0.5;
             float r = length(uv);
             if(r > 0.5) discard;
-            
-            // Soft glow
             float glow = 1.0 - (r * 2.0);
             glow = pow(glow, 2.0);
-            
             gl_FragColor = vec4(vColor, glow);
         }
     `;
-
 
     // --- SETUP FUNCTION ---
     function init() {
@@ -277,12 +244,10 @@
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 500);
 
-        // 1. Audio Setup
         setupAudio();
 
-        // 2. Three.js Scene
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000000, 0.05);
+        scene.fog = new THREE.FogExp2(0x000000, 0.02);
 
         camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
         camera.position.set(0, 0, 6);
@@ -295,14 +260,8 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
 
-        // 3. Mandelbulb Object (Raymarching Proxy)
-        // We use a box that encompasses the area where the fractal exists
-        const boxGeo = new THREE.BoxGeometry(4, 4, 4); 
-        // We need to render the back faces or handle culling carefully, 
-        // but for a centered fractal, a standard material approach works if logic is right.
-        // Actually, simpler: Render a Sphere and raymarch inside it.
+        // -- Fractal --
         const sphereGeo = new THREE.SphereGeometry(3, 32, 32); 
-
         const fractalMat = new THREE.ShaderMaterial({
             vertexShader: fractalVertexShader,
             fragmentShader: fractalFragmentShader,
@@ -313,22 +272,19 @@
                 uAudioLow: audioUniforms.uAudioLow
             },
             side: THREE.DoubleSide,
-            transparent: true // Allow discarding background
+            transparent: true
         });
-
         // fractalMesh = new THREE.Mesh(sphereGeo, fractalMat);
         // scene.add(fractalMesh);
 
-        //above line commented out to remove the two big shapes and focus on particles only
-
-        // 4. Particle System
+        // -- Particles --
         const particlesGeo = new THREE.BufferGeometry();
         const positions = [];
         const scales = [];
         const randoms = [];
 
         for (let i = 0; i < PARTICLE_COUNT; i++) {
-            positions.push(0, 0, 0); // Positions calculated in vertex shader
+            positions.push(0, 0, 0);
             scales.push(Math.random());
             randoms.push(Math.random(), Math.random(), Math.random());
         }
@@ -342,7 +298,11 @@
             fragmentShader: particleFragmentShader,
             uniforms: {
                 uTime: { value: 0 },
-                uAudioTotal: audioUniforms.uAudioTotal
+                uAudioTotal: audioUniforms.uAudioTotal,
+                uColorA: { value: new THREE.Color(params.color1) },
+                uColorB: { value: new THREE.Color(params.color2) },
+                uSizeMult: { value: params.baseSize },
+                uAudioStrength: { value: params.audioStrength }
             },
             transparent: true,
             depthWrite: false,
@@ -352,12 +312,10 @@
         particleSystem = new THREE.Points(particlesGeo, particlesMat);
         scene.add(particleSystem);
 
-        // 5. Post Processing (Unreal Bloom)
+        // -- Post Processing --
         const renderScene = new RenderPass(scene, camera);
-        
-        // Resolution, Strength, Radius, Threshold
         const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.strength = 1.2;
+        bloomPass.strength = params.bloomStrength;
         bloomPass.radius = 0.5;
         bloomPass.threshold = 0.1;
 
@@ -365,9 +323,34 @@
         composer.addPass(renderScene);
         composer.addPass(bloomPass);
 
-        // Event Listeners
-        window.addEventListener('resize', onWindowResize);
+        // -- GUI SETUP --
+        const gui = new GUI({ title: 'Visual Controls' });
         
+        const folderColors = gui.addFolder('Colors');
+        folderColors.addColor(params, 'color1').name('Primary Color').onChange(v => {
+            particleSystem.material.uniforms.uColorA.value.set(v);
+        });
+        folderColors.addColor(params, 'color2').name('Secondary Color').onChange(v => {
+            particleSystem.material.uniforms.uColorB.value.set(v);
+        });
+
+        const folderParticles = gui.addFolder('Particles');
+        folderParticles.add(params, 'speed', 0.0, 2.0).name('Speed'); 
+        folderParticles.add(params, 'baseSize', 0.1, 10.0).name('Size').onChange(v => {
+            particleSystem.material.uniforms.uSizeMult.value = v;
+        });
+
+        const folderAudio = gui.addFolder('Audio');
+        folderAudio.add(params, 'audioStrength', 0.0, 3.0).name('React Strength').onChange(v => {
+            particleSystem.material.uniforms.uAudioStrength.value = v;
+        });
+        
+        const folderBloom = gui.addFolder('Glow');
+        folderBloom.add(params, 'bloomStrength', 0.0, 3.0).name('Bloom Intensity').onChange(v => {
+            bloomPass.strength = v;
+        });
+
+        window.addEventListener('resize', onWindowResize);
         animate();
     }
 
@@ -376,8 +359,6 @@
         const nameDisplay = document.getElementById('mic-name');
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Display Device Name
             const track = stream.getAudioTracks()[0];
             nameDisplay.innerText = track.label || "Default Audio Device";
             
@@ -385,11 +366,7 @@
             status.style.color = "#0f0";
             
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // Ensure context is running
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
-            }
+            if (audioCtx.state === 'suspended') { await audioCtx.resume(); }
 
             const source = audioCtx.createMediaStreamSource(stream);
             analyser = audioCtx.createAnalyser();
@@ -397,23 +374,18 @@
             source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
         } catch (err) {
-            console.error("Microphone access denied or error:", err);
+            console.error("Microphone error:", err);
             status.innerText = "Denied/Error";
             status.style.color = "#f00";
-            alert("Microphone access is needed for audio reactivity.");
+            alert("Microphone access is needed.");
         }
     }
 
     function updateAudio() {
         if (!analyser) return;
-        
         analyser.getByteFrequencyData(dataArray);
-        
-        // Calculate average volume for different bands
         let low = 0, mid = 0, high = 0, total = 0;
         const binCount = analyser.frequencyBinCount;
-        
-        // Simple slicing for bands
         for(let i = 0; i < binCount; i++) {
             let val = dataArray[i] / 255.0;
             total += val;
@@ -422,12 +394,10 @@
             else high += val;
         }
 
-        // Update Debug Bar
         const avgVolume = total / binCount;
         const bar = document.getElementById('volume-bar');
         if(bar) bar.style.width = Math.min(100, avgVolume * 400) + '%'; 
 
-        // Show hint if volume is consistently 0
         if (avgVolume === 0 && audioUniforms.uAudioTotal.value === 0) {
              const hint = document.getElementById('windows-hint');
              if(hint) hint.style.display = 'block';
@@ -449,31 +419,31 @@
         if(fractalMesh) fractalMesh.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
     }
 
+    // FIX 2: Cleaned up animate function (removed the nested loop)
     function animate() {
         requestAnimationFrame(animate);
 
-        const time = clock.getElapsedTime();
+        const delta = clock.getDelta();
         updateAudio();
 
+        // Increment custom time based on the user's speed setting
+        customTime += delta * params.speed; 
+
         if (fractalMesh) {
-            fractalMesh.material.uniforms.uTime.value = time;
-            // Slowly rotate the container box to view angles
-            fractalMesh.rotation.y = time * 0.1; 
-            fractalMesh.rotation.z = time * 0.05;
+            fractalMesh.material.uniforms.uTime.value = clock.getElapsedTime(); 
+            fractalMesh.rotation.y = clock.getElapsedTime() * 0.1; 
+            fractalMesh.rotation.z = clock.getElapsedTime() * 0.05;
         }
 
         if (particleSystem) {
-            particleSystem.material.uniforms.uTime.value = time;
+            particleSystem.material.uniforms.uTime.value = customTime;
         }
 
         composer.render();
     }
 
-    // Start interaction
     const title = document.getElementById('overlay-title');
     const subtitle = document.getElementById('overlay-subtitle');
-    
-    // If we reached here, modules are loaded
     title.innerText = 'Initialize System';
     subtitle.innerText = 'Click to enable Microphone & Rendering';
     
