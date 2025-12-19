@@ -1,0 +1,256 @@
+/**
+ * Rays - Audio Reactive Particles
+ * Stylesheet
+ */
+
+/* =============================================================================
+   BASE STYLES
+   ============================================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(135deg, #0a0a0f 0%, #0d1117 50%, #0a0a0f 100%);
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    cursor: none;
+}
+
+body.show-cursor {
+    cursor: default;
+}
+
+canvas {
+    display: block;
+}
+
+/* =============================================================================
+   LOADING SCREEN
+   ============================================================================= */
+
+#overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 70%, #000 100%);
+    color: white;
+    flex-direction: column;
+    cursor: pointer;
+    z-index: 10;
+    transition: opacity 0.8s ease-out;
+}
+
+#overlay::before {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border: 1px solid rgba(100, 150, 255, 0.2);
+    border-radius: 50%;
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+#overlay::after {
+    content: '';
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border: 1px solid rgba(100, 150, 255, 0.1);
+    border-radius: 50%;
+    animation: pulse-ring 2s ease-out infinite 0.5s;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
+}
+
+h1#overlay-title {
+    margin: 0 0 15px 0;
+    font-family: 'Cinzel', serif;
+    font-weight: 400;
+    font-size: 2.5rem;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #6b9fff 0%, #ffffff 50%, #ffd700 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    z-index: 1;
+}
+
+p#overlay-subtitle {
+    color: rgba(180, 190, 220, 0.8);
+    font-size: 1.1rem;
+    font-style: italic;
+    letter-spacing: 2px;
+    z-index: 1;
+}
+
+/* =============================================================================
+   DEBUG PANEL (Auto-hiding)
+   ============================================================================= */
+
+#debug-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12px;
+    z-index: 5;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 12px 16px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+body.show-ui #debug-panel {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#volume-bar-container {
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+#volume-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3380ff, #66ffcc);
+    border-radius: 2px;
+    transition: width 0.05s;
+}
+
+#windows-hint {
+    color: #ffaa00;
+    display: none;
+    margin-top: 8px;
+    font-size: 11px;
+}
+
+/* =============================================================================
+   KEYBOARD HINTS
+   ============================================================================= */
+
+#keyboard-hints {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 11px;
+    z-index: 5;
+    pointer-events: none;
+    text-align: right;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+body.show-ui #keyboard-hints {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hint-key {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 5px;
+    font-weight: 600;
+}
+
+/* =============================================================================
+   GUI CONTROLS (lil-gui)
+   ============================================================================= */
+
+.lil-gui {
+    opacity: 0 !important;
+    transform: translateX(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease !important;
+}
+
+body.show-ui .lil-gui,
+body.gui-visible .lil-gui {
+    opacity: 1 !important;
+    transform: translateX(0);
+}
+
+/* =============================================================================
+   NOTIFICATIONS
+   ============================================================================= */
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+.notification {
+    animation: fadeInOut 3s forwards;
+}
+
+/* =============================================================================
+   ACCESSIBILITY - Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+    #overlay::before,
+    #overlay::after {
+        animation: none;
+    }
+    
+    * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+/* =============================================================================
+   MOBILE STYLES
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    h1#overlay-title {
+        font-size: 1.8rem;
+        letter-spacing: 4px;
+    }
+    
+    p#overlay-subtitle {
+        font-size: 0.9rem;
+    }
+    
+    #debug-panel {
+        font-size: 10px;
+        padding: 8px 12px;
+    }
+    
+    #keyboard-hints {
+        display: none; /* No keyboard on mobile */
+    }
+}

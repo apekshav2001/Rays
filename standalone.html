@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Rays - Beautiful audio-reactive particle visualization">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>Rays - Audio Reactive Particles</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* Base */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0f 0%, #0d1117 50%, #0a0a0f 100%);
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            cursor: none;
+        }
+
+        body.show-cursor {
+            cursor: default;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Loading Screen */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 70%, #000 100%);
+            color: white;
+            flex-direction: column;
+            cursor: pointer;
+            z-index: 10;
+            transition: opacity 0.8s ease-out;
+        }
+
+        #overlay::before {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border: 1px solid rgba(100, 150, 255, 0.2);
+            border-radius: 50%;
+            animation: pulse-ring 2s ease-out infinite;
+        }
+
+        #overlay::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border: 1px solid rgba(100, 150, 255, 0.1);
+            border-radius: 50%;
+            animation: pulse-ring 2s ease-out infinite 0.5s;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.8);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        h1#overlay-title {
+            margin: 0 0 15px 0;
+            font-family: 'Cinzel', serif;
+            font-weight: 400;
+            font-size: 2.5rem;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #6b9fff 0%, #ffffff 50%, #ffd700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            z-index: 1;
+        }
+
+        p#overlay-subtitle {
+            color: rgba(180, 190, 220, 0.8);
+            font-size: 1.1rem;
+            font-style: italic;
+            letter-spacing: 2px;
+            z-index: 1;
+        }
+
+        /* Debug Panel (Auto-hiding) */
+        #debug-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 12px;
+            z-index: 5;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 12px 16px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        body.show-ui #debug-panel {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #volume-bar-container {
+            width: 120px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        #volume-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3380ff, #66ffcc);
+            border-radius: 2px;
+            transition: width 0.05s;
+        }
+
+        #windows-hint {
+            color: #ffaa00;
+            display: none;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+
+        /* Keyboard Hints */
+        #keyboard-hints {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 11px;
+            z-index: 5;
+            pointer-events: none;
+            text-align: right;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        body.show-ui #keyboard-hints {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hint-key {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 5px;
+            font-weight: 600;
+        }
+
+        /* GUI Controls */
+        .lil-gui {
+            opacity: 0 !important;
+            transform: translateX(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease !important;
+        }
+
+        body.show-ui .lil-gui,
+        body.gui-visible .lil-gui {
+            opacity: 1 !important;
+            transform: translateX(0);
+        }
+
+        /* Notifications */
+        @keyframes fadeInOut {
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            15% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            85% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+
+        /* Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+
+            #overlay::before,
+            #overlay::after {
+                animation: none;
+            }
+
+            * {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            h1#overlay-title {
+                font-size: 1.8rem;
+                letter-spacing: 4px;
+            }
+
+            p#overlay-subtitle {
+                font-size: 0.9rem;
+            }
+
+            #debug-panel {
+                font-size: 10px;
+                padding: 8px 12px;
+            }
+
+            #keyboard-hints {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="overlay" role="button" aria-label="Click to start">
+        <h1 id="overlay-title">Rays</h1>
+        <p id="overlay-subtitle">Click anywhere to begin</p>
+    </div>
+
+    <div id="debug-panel" aria-hidden="true">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="opacity: 0.6;">●</span>
+            <span id="mic-status">Initializing...</span>
+        </div>
+        <div style="opacity: 0.6; margin-bottom: 8px;">
+            <span id="mic-name">Audio Device</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="opacity: 0.6;">VOL</span>
+            <div id="volume-bar-container">
+                <div id="volume-bar" style="width: 0%;"></div>
+            </div>
+        </div>
+        <div id="windows-hint">Check Windows Privacy → Microphone</div>
+    </div>
+
+    <div id="keyboard-hints" aria-label="Keyboard shortcuts">
+        <div style="margin-bottom: 4px;">Fullscreen <span class="hint-key">F</span></div>
+        <div style="margin-bottom: 4px;">Settings <span class="hint-key">H</span></div>
+        <div>FPS Mode <span class="hint-key">P</span></div>
+    </div>
+
+    <script>
+        window.addEventListener('error', function (e) {
+            const title = document.getElementById('overlay-title');
+            const subtitle = document.getElementById('overlay-subtitle');
+            if (title) {
+                title.innerText = 'Error Loading';
+                title.style.color = '#ff5555';
+                subtitle.innerText = e.message || 'Failed to load. Check console.';
+            }
+        }, true);
+    </script>
+
+    <script type="importmap">
+        { "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }}
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+        // =====================================================================
+        // CONFIGURATION
+        // =====================================================================
+        const CONFIG = {
+            PARTICLE_COUNT: 15000,
+            PARTICLE_COUNT_MOBILE: 5000,
+            CAMERA_DISTANCE: 6,
+            FOG_DENSITY: 0.02,
+            MAX_PIXEL_RATIO: 2,
+            UI_HIDE_DELAY: 3000,
+            MOUSE_THROTTLE: 100
+        };
+
+        const COLOR_PRESETS = {
+            'Custom': null,
+            'Ocean': { color1: '#0066cc', color2: '#00ffcc' },
+            'Sunset': { color1: '#ff6b35', color2: '#9b59b6' },
+            'Forest': { color1: '#27ae60', color2: '#16a085' },
+            'Cosmic': { color1: '#9b59b6', color2: '#e91e63' },
+            'Fire': { color1: '#ff4500', color2: '#ffd700' },
+            'Aurora': { color1: '#00d4ff', color2: '#7b2ff7' }
+        };
+
+        const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const getParticleCount = () => isMobile() ? CONFIG.PARTICLE_COUNT_MOBILE : CONFIG.PARTICLE_COUNT;
+
+        // =====================================================================
+        // SHADERS
+        // =====================================================================
+        const particleVertexShader = `
+            uniform float uTime;
+            uniform float uAudioTotal;
+            uniform vec3 uColorA;
+            uniform vec3 uColorB;
+            uniform float uSizeMult;
+            uniform float uAudioStrength;
+            attribute float aScale;
+            attribute vec3 aRandom;
+            varying vec3 vColor;
+
+            void main() {
+                vec3 pos = position;
+                float spreadX = 40.0, spreadY = 25.0, spreadZ = 20.0;
+
+                vec3 initialPos;
+                initialPos.x = (aRandom.x - 0.5) * spreadX;
+                initialPos.y = (aRandom.y - 0.5) * spreadY;
+                initialPos.z = (aRandom.z - 0.5) * spreadZ - 2.0;
+
+                float angle = uTime * 0.5 + aRandom.x * 2.0;
+                float c = cos(angle), s = sin(angle);
+
+                pos.x = initialPos.x * c - initialPos.z * s;
+                pos.z = initialPos.x * s + initialPos.z * c;
+                pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
+                pos += normalize(pos) * uAudioTotal * 2.0 * aRandom.y * uAudioStrength;
+
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                
+                float audioSize = (uAudioTotal * 3.0) * uAudioStrength;
+                gl_PointSize = (uSizeMult * aScale + audioSize) * (30.0 / -mvPosition.z);
+                
+                float mixVal = (uAudioTotal * uAudioStrength * 0.5) + aRandom.x;
+                vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
+            }
+        `;
+
+        const particleFragmentShader = `
+            varying vec3 vColor;
+            void main() {
+                vec2 uv = gl_PointCoord.xy - 0.5;
+                float r = length(uv);
+                if(r > 0.5) discard;
+                float glow = 1.0 - (r * 2.0);
+                glow = pow(glow, 2.0);
+                gl_FragColor = vec4(vColor, glow);
+            }
+        `;
+
+        // =====================================================================
+        // GLOBALS
+        // =====================================================================
+        let camera, scene, renderer, composer, particleSystem, bloomPass;
+        let analyser, dataArray, audioStream;
+        let customTime = 0, isAmbientMode = false;
+        let uiTimeout, guiVisible = false, targetFps = 60, lastFrameTime = 0;
+
+        // Cached DOM elements
+        let volumeBar, hintElement, micStatus, micName;
+
+        const clock = new THREE.Clock();
+        const params = {
+            color1: '#3380ff',
+            color2: '#ffcc66',
+            baseSize: 3.0,
+            speed: 0.2,
+            audioStrength: 1.0,
+            bloomStrength: 1.2,
+            preset: 'Custom',
+            lowFpsMode: false
+        };
+
+        const audioUniforms = {
+            uAudioLow: { value: 0.0 },
+            uAudioMid: { value: 0.0 },
+            uAudioHigh: { value: 0.0 },
+            uAudioTotal: { value: 0.0 }
+        };
+
+        // =====================================================================
+        // UTILITIES
+        // =====================================================================
+        function throttle(fn, delay) {
+            let lastCall = 0;
+            return (...args) => {
+                const now = Date.now();
+                if (now - lastCall >= delay) {
+                    lastCall = now;
+                    fn(...args);
+                }
+            };
+        }
+
+        function showUI() {
+            document.body.classList.add('show-ui', 'show-cursor');
+            clearTimeout(uiTimeout);
+            uiTimeout = setTimeout(hideUI, CONFIG.UI_HIDE_DELAY);
+        }
+
+        function hideUI() {
+            if (!guiVisible) {
+                document.body.classList.remove('show-ui', 'show-cursor');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = { info: '#3380ff', warning: '#ffaa00', error: '#ff5555' };
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+                background: rgba(0,0,0,0.8); color: ${colors[type]}; padding: 12px 24px;
+                border-radius: 8px; font-family: 'SF Mono', monospace; font-size: 14px;
+                z-index: 100; backdrop-filter: blur(10px); border: 1px solid ${colors[type]}33;
+                animation: fadeInOut 3s forwards;
+            `;
+            notification.innerText = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // =====================================================================
+        // AUDIO
+        // =====================================================================
+        async function setupAudio() {
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const track = audioStream.getAudioTracks()[0];
+                micName.innerText = track.label || 'Default Audio Device';
+                micStatus.innerText = 'Active';
+                micStatus.style.color = '#0f0';
+
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+                const source = audioCtx.createMediaStreamSource(audioStream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            } catch (err) {
+                console.warn('Microphone unavailable, using ambient mode:', err);
+                isAmbientMode = true;
+                micStatus.innerText = 'Ambient Mode';
+                micStatus.style.color = '#ffaa00';
+                micName.innerText = 'No microphone';
+                showNotification('Running in ambient mode (no mic access)', 'info');
+            }
+        }
+
+        function updateAudio() {
+            let low = 0, mid = 0, high = 0, total = 0, volume = 0;
+
+            if (isAmbientMode) {
+                // Ambient mode: gentle pulsing
+                const t = clock.getElapsedTime();
+                const wave1 = (Math.sin(t * 0.5) + 1) * 0.15;
+                const wave2 = (Math.sin(t * 0.3 + 1) + 1) * 0.1;
+                total = wave1 + wave2 * 0.5;
+                low = wave1;
+                volume = wave1;
+            } else if (analyser) {
+                analyser.getByteFrequencyData(dataArray);
+                const binCount = analyser.frequencyBinCount;
+
+                for (let i = 0; i < binCount; i++) {
+                    const val = dataArray[i] / 255.0;
+                    total += val;
+                    if (i < binCount / 3) low += val;
+                    else if (i < 2 * binCount / 3) mid += val;
+                    else high += val;
+                }
+                volume = total / binCount;
+                total = (total / binCount) * 4.0;
+                low = (low / (binCount / 3)) * 2.0;
+            }
+
+            // Update uniforms with smoothing
+            audioUniforms.uAudioTotal.value = THREE.MathUtils.lerp(audioUniforms.uAudioTotal.value, total, 0.1);
+            audioUniforms.uAudioLow.value = THREE.MathUtils.lerp(audioUniforms.uAudioLow.value, low, 0.1);
+
+            // Update volume bar
+            if (volumeBar) volumeBar.style.width = Math.min(100, volume * 400) + '%';
+
+            // Show hint if no audio and not ambient
+            if (!isAmbientMode && volume === 0 && audioUniforms.uAudioTotal.value === 0) {
+                if (hintElement) hintElement.style.display = 'block';
+            } else {
+                if (hintElement) hintElement.style.display = 'none';
+            }
+        }
+
+        // =====================================================================
+        // INITIALIZATION
+        // =====================================================================
+        async function init() {
+            // Hide overlay
+            const overlay = document.getElementById('overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 800);
+
+            // Cache DOM elements
+            volumeBar = document.getElementById('volume-bar');
+            hintElement = document.getElementById('windows-hint');
+            micStatus = document.getElementById('mic-status');
+            micName = document.getElementById('mic-name');
+
+            await setupAudio();
+            setupScene();
+            setupParticles();
+            setupPostProcessing();
+            setupGUI();
+            setupEventListeners();
+
+            showUI();
+            animate();
+        }
+
+        function setupScene() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, CONFIG.FOG_DENSITY);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 0, CONFIG.CAMERA_DISTANCE);
+
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.MAX_PIXEL_RATIO));
+            document.body.appendChild(renderer.domElement);
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+        }
+
+        function setupParticles() {
+            const count = getParticleCount();
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const scales = new Float32Array(count);
+            const randoms = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = positions[i * 3 + 1] = positions[i * 3 + 2] = 0;
+                scales[i] = Math.random();
+                randoms[i * 3] = Math.random();
+                randoms[i * 3 + 1] = Math.random();
+                randoms[i * 3 + 2] = Math.random();
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader: particleVertexShader,
+                fragmentShader: particleFragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uAudioTotal: audioUniforms.uAudioTotal,
+                    uColorA: { value: new THREE.Color(params.color1) },
+                    uColorB: { value: new THREE.Color(params.color2) },
+                    uSizeMult: { value: params.baseSize },
+                    uAudioStrength: { value: params.audioStrength }
+                },
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        function setupPostProcessing() {
+            const renderScene = new RenderPass(scene, camera);
+            bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight),
+                params.bloomStrength, 0.4, 0.85
+            );
+            bloomPass.threshold = 0.1;
+            bloomPass.radius = 0.5;
+
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+        }
+
+        function setupGUI() {
+            const gui = new GUI({ title: '✦ Rays Controls' });
+            gui.close();
+
+            // Presets
+            gui.addFolder('Theme Presets').add(params, 'preset', Object.keys(COLOR_PRESETS)).name('Theme').onChange(preset => {
+                if (COLOR_PRESETS[preset]) {
+                    params.color1 = COLOR_PRESETS[preset].color1;
+                    params.color2 = COLOR_PRESETS[preset].color2;
+                    particleSystem.material.uniforms.uColorA.value.set(params.color1);
+                    particleSystem.material.uniforms.uColorB.value.set(params.color2);
+                    gui.controllersRecursive().forEach(c => {
+                        if (c.property === 'color1' || c.property === 'color2') c.updateDisplay();
+                    });
+                }
+            });
+
+            // Colors
+            const colors = gui.addFolder('Colors');
+            colors.addColor(params, 'color1').name('Primary').onChange(v => {
+                particleSystem.material.uniforms.uColorA.value.set(v);
+                params.preset = 'Custom';
+            });
+            colors.addColor(params, 'color2').name('Secondary').onChange(v => {
+                particleSystem.material.uniforms.uColorB.value.set(v);
+                params.preset = 'Custom';
+            });
+
+            // Particles
+            const particles = gui.addFolder('Particles');
+            particles.add(params, 'speed', 0, 2).name('Speed');
+            particles.add(params, 'baseSize', 0.1, 10).name('Size').onChange(v => {
+                particleSystem.material.uniforms.uSizeMult.value = v;
+            });
+
+            // Audio
+            gui.addFolder('Audio').add(params, 'audioStrength', 0, 3).name('React Strength').onChange(v => {
+                particleSystem.material.uniforms.uAudioStrength.value = v;
+            });
+
+            // Glow
+            gui.addFolder('Glow').add(params, 'bloomStrength', 0, 3).name('Bloom').onChange(v => {
+                bloomPass.strength = v;
+            });
+
+            // Performance
+            gui.addFolder('Performance').add(params, 'lowFpsMode').name('30 FPS Mode').onChange(v => {
+                targetFps = v ? 30 : 60;
+            });
+
+            window.raysGui = gui;
+        }
+
+        function setupEventListeners() {
+            // Auto-hide UI
+            const throttledShow = throttle(() => showUI(), CONFIG.MOUSE_THROTTLE);
+            document.addEventListener('mousemove', throttledShow);
+            document.addEventListener('mousedown', () => showUI());
+            document.addEventListener('touchstart', () => showUI());
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+
+                if (key === 'f') {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => { });
+                    } else {
+                        document.exitFullscreen();
+                    }
+                }
+
+                if (key === 'h') {
+                    guiVisible = !guiVisible;
+                    document.body.classList.toggle('gui-visible', guiVisible);
+                    if (guiVisible) {
+                        window.raysGui?.open();
+                        showUI();
+                    } else {
+                        window.raysGui?.close();
+                    }
+                }
+
+                if (key === 'p') {
+                    params.lowFpsMode = !params.lowFpsMode;
+                    targetFps = params.lowFpsMode ? 30 : 60;
+                    window.raysGui?.controllersRecursive().forEach(c => c.updateDisplay());
+                }
+            });
+
+            // Cleanup on exit
+            window.addEventListener('beforeunload', () => {
+                if (audioStream) audioStream.getTracks().forEach(t => t.stop());
+            });
+
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                composer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // =====================================================================
+        // ANIMATION LOOP
+        // =====================================================================
+        function animate(timestamp = 0) {
+            requestAnimationFrame(animate);
+
+            // FPS throttle
+            if (params.lowFpsMode) {
+                const interval = 1000 / targetFps;
+                if (timestamp - lastFrameTime < interval) return;
+                lastFrameTime = timestamp;
+            }
+
+            const delta = clock.getDelta();
+            updateAudio();
+
+            customTime += delta * params.speed;
+            if (particleSystem) {
+                particleSystem.material.uniforms.uTime.value = customTime;
+            }
+
+            composer.render();
+        }
+
+        // Start
+        document.getElementById('overlay').addEventListener('click', init);
+        document.getElementById('overlay').addEventListener('touchstart', init, { once: true });
+    </script>
+</body>
+
+</html>
