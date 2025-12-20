@@ -2,7 +2,7 @@
     "theme": {
         "text": "Color Theme",
         "type": "dropdown",
-        "value": "ocean",
+        "value": 0,
         "items": [
             "ocean",
             "sunset",
@@ -25,7 +25,7 @@
     "fps": {
         "text": "FPS Limit",
         "type": "dropdown",
-        "value": "30",
+        "value": 2,
         "items": [
             "15",
             "30",
@@ -35,10 +35,23 @@
     "speed": {
         "text": "Animation Speed",
         "type": "slider",
-        "value": 0.15,
-        "min": 0.05,
-        "max": 0.5,
-        "step": 0.05
+        "value": 0.3,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.1
+    },
+    "motion": {
+        "text": "Motion Intensity",
+        "type": "slider",
+        "value": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.1
+    },
+    "static": {
+        "text": "Static Mode (Freeze)",
+        "type": "checkbox",
+        "value": false
     },
     "bloom": {
         "text": "Bloom/Glow Effect",
@@ -69,7 +82,7 @@
     "textFont": {
         "text": "Text Font",
         "type": "dropdown",
-        "value": "Great Vibes",
+        "value": 0,
         "items": [
             "Great Vibes",
             "Pinyon Script",
@@ -81,7 +94,7 @@
     "textSize": {
         "text": "Text Size",
         "type": "dropdown",
-        "value": "8vw",
+        "value": 2,
         "items": [
             "4vw",
             "6vw",
@@ -91,10 +104,15 @@
             "15vw"
         ]
     },
-    "textColor": {
-        "text": "Text Color",
-        "type": "color",
-        "value": "#FFFFFF"
+    "textPosition": {
+        "text": "Text Position",
+        "type": "dropdown",
+        "value": 1,
+        "items": [
+            "Top",
+            "Center",
+            "Bottom"
+        ]
     },
     "textGlow": {
         "text": "Text Glow Animation",

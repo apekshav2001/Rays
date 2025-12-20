@@ -48,6 +48,21 @@
             z-index: 10;
         }
 
+        /* Text Position Classes */
+        #text-overlay.pos-top {
+            align-items: flex-start;
+            padding-top: 8vh;
+        }
+
+        #text-overlay.pos-center {
+            align-items: center;
+        }
+
+        #text-overlay.pos-bottom {
+            align-items: flex-end;
+            padding-bottom: 8vh;
+        }
+
         #custom-text {
             font-family: 'Great Vibes', 'Pinyon Script', cursive;
             font-size: clamp(3rem, 8vw, 8rem);
@@ -119,12 +134,16 @@
         const CONFIG = {
             // Performance
             particles: clamp(parseInt(params.get('particles')) || 5000, 1000, 15000),
-            fps: parseInt(params.get('fps')) || 30,
+            fps: parseInt(params.get('fps')) || 60,
             bloom: params.get('bloom') !== 'off',
             pixelRatio: Math.min(window.devicePixelRatio, 1.5),
 
+            // Animation
+            speed: clamp(parseFloat(params.get('speed')) || 0.3, 0.0, 2.0),
+            motion: clamp(parseFloat(params.get('motion')) || 0.5, 0.0, 1.0), // 0 = minimal, 1 = full
+            static: params.get('static') === 'on', // Freeze animation completely
+
             // Visuals
-            speed: clamp(parseFloat(params.get('speed')) || 0.15, 0.05, 1.0),
             baseSize: clamp(parseFloat(params.get('size')) || 2.5, 0.5, 8.0),
             bloomStrength: clamp(parseFloat(params.get('bloomStrength')) || 1.0, 0.0, 2.5),
 
@@ -138,6 +157,7 @@
             textFont: params.get('textFont') || 'Great Vibes',
             textSize: params.get('textSize') || '8vw',
             textColor: params.get('textColor') ? '#' + params.get('textColor') : 'rgba(255, 255, 255, 0.9)',
+            textPosition: params.get('textPosition') || 'center', // top, center, bottom
             textGlow: params.get('textGlow') !== 'off'
         };
 
@@ -169,6 +189,7 @@
         const vertexShader = `
             uniform float uTime;
             uniform float uAmbient;
+            uniform float uMotion; // 0.0 = calm, 1.0 = full motion
             uniform vec3 uColorA;
             uniform vec3 uColorB;
             uniform float uSizeMult;
@@ -179,37 +200,52 @@
             varying vec3 vColor;
 
             void main() {
-                vec3 pos = position;
-                float spreadX = 40.0; 
-                float spreadY = 25.0;
-                float spreadZ = 20.0;
+                // Base spread
+                float spreadX = 35.0; 
+                float spreadY = 20.0;
+                float spreadZ = 25.0;
 
-                vec3 initialPos;
-                initialPos.x = (aRandom.x - 0.5) * spreadX;
-                initialPos.y = (aRandom.y - 0.5) * spreadY;
-                initialPos.z = (aRandom.z - 0.5) * spreadZ - 2.0; 
+                // Initial position
+                vec3 basePos;
+                basePos.x = (aRandom.x - 0.5) * spreadX;
+                basePos.y = (aRandom.y - 0.5) * spreadY;
+                basePos.z = (aRandom.z - 0.5) * spreadZ;
 
-                float angle = uTime * 0.5 + aRandom.x * 2.0;
-                float c = cos(angle);
-                float s = sin(angle);
+                vec3 pos = basePos;
 
-                pos.x = initialPos.x * c - initialPos.z * s;
-                pos.z = initialPos.x * s + initialPos.z * c;
-                pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
+                // Apply motion based on intensity
+                if (uMotion > 0.0) {
+                    float particlePhase = aRandom.x * 6.28318 + aRandom.y * 3.14159;
+                    float orbitSpeed = 0.1 + aRandom.z * 0.15;
+                    float orbitRadius = (1.0 + aRandom.y * 2.0) * uMotion;
+                    
+                    // Gentle orbital motion (scaled by motion intensity)
+                    float t = uTime * orbitSpeed + particlePhase;
+                    pos.x += cos(t) * orbitRadius;
+                    pos.z += sin(t) * orbitRadius;
+                    pos.y += sin(t * 0.5 + aRandom.x * 3.0) * 0.8 * uMotion;
 
-                // Ambient pulsing (replaces audio reactivity)
-                float pulse = sin(uTime * 0.8) * 0.5 + 0.5;
-                pulse *= uAmbient;
-                pos += normalize(pos) * pulse * 0.5 * aRandom.y;
+                    // Subtle drift (scaled by motion intensity)
+                    float driftX = sin(uTime * 0.15 + aRandom.y * 5.0) * 0.5 * uMotion;
+                    float driftY = cos(uTime * 0.1 + aRandom.x * 4.0) * 0.3 * uMotion;
+                    pos += vec3(driftX, driftY, 0.0);
+                }
+
+                // Very subtle breathing effect (always active for "alive" feeling)
+                float breathe = sin(uTime * 0.3) * 0.05 * uMotion;
+                pos *= (1.0 + breathe);
 
                 vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
                 
-                float ambientSize = pulse * 1.5;
-                gl_PointSize = (uSizeMult * aScale + ambientSize) * (30.0 / -mvPosition.z);
+                // Size with subtle variation
+                float sizeVariation = 1.0 + sin(uTime * 0.5 + aRandom.x * 6.28318) * 0.15 * uMotion;
+                gl_PointSize = (uSizeMult * aScale * sizeVariation) * (30.0 / -mvPosition.z);
                 
-                float mixVal = pulse * 0.3 + aRandom.x;
-                vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
+                // Color blending
+                float pulse = sin(uTime * 0.4 + aRandom.x * 3.14159) * 0.5 + 0.5;
+                float colorMix = pulse * 0.3 * uMotion + aRandom.x * 0.7;
+                vColor = mix(uColorA, uColorB, clamp(colorMix, 0.0, 1.0));
             }
         `;
 
@@ -233,7 +269,7 @@
         let camera, scene, renderer, composer, particleSystem;
         let customTime = 0;
         let lastFrameTime = 0;
-        const frameInterval = 1000 / CONFIG.fps;
+        let frameInterval = 1000 / CONFIG.fps;
 
         const clock = new THREE.Clock();
 
@@ -289,6 +325,7 @@
 
         function setupText() {
             const textElement = document.getElementById('custom-text');
+            const overlayElement = document.getElementById('text-overlay');
             if (!textElement) return;
 
             // Set text content
@@ -304,11 +341,27 @@
             // Apply color
             textElement.style.color = CONFIG.textColor;
 
+            // Apply position
+            updateTextPosition(CONFIG.textPosition);
+
             // Toggle glow animation
             if (!CONFIG.textGlow) {
                 textElement.style.animation = 'none';
                 textElement.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.3)';
             }
+        }
+
+        function updateTextPosition(position) {
+            const overlay = document.getElementById('text-overlay');
+            if (!overlay) return;
+
+            // Remove existing position classes
+            overlay.classList.remove('pos-top', 'pos-center', 'pos-bottom');
+
+            // Add new position class
+            const posClass = 'pos-' + (position || 'center');
+            overlay.classList.add(posClass);
+            CONFIG.textPosition = position;
         }
 
         function updateText(newText) {
@@ -347,6 +400,7 @@
                 uniforms: {
                     uTime: { value: 0 },
                     uAmbient: { value: 1.0 },
+                    uMotion: { value: CONFIG.static ? 0.0 : CONFIG.motion },
                     uColorA: { value: new THREE.Color(CONFIG.color1) },
                     uColorB: { value: new THREE.Color(CONFIG.color2) },
                     uSizeMult: { value: CONFIG.baseSize }
@@ -379,16 +433,23 @@
         function animate(timestamp = 0) {
             requestAnimationFrame(animate);
 
-            // FPS limiting
-            const elapsed = timestamp - lastFrameTime;
-            if (elapsed < frameInterval) return;
-            lastFrameTime = timestamp - (elapsed % frameInterval);
+            // Optional FPS limiting (only when fps < 60)
+            if (CONFIG.fps < 60) {
+                const elapsed = timestamp - lastFrameTime;
+                if (elapsed < frameInterval) return;
+                lastFrameTime = timestamp - (elapsed % frameInterval);
+            }
 
             const delta = clock.getDelta();
-            customTime += delta * CONFIG.speed;
+
+            // Only advance time if not in static mode
+            if (!CONFIG.static) {
+                customTime += delta * CONFIG.speed;
+            }
 
             if (particleSystem) {
                 particleSystem.material.uniforms.uTime.value = customTime;
+                particleSystem.material.uniforms.uMotion.value = CONFIG.static ? 0.0 : CONFIG.motion;
             }
 
             if (composer && CONFIG.bloom) {
@@ -407,6 +468,35 @@
             }
         }
 
+        // Cleanup function for proper WebGL disposal
+        function cleanup() {
+            if (particleSystem) {
+                particleSystem.geometry.dispose();
+                particleSystem.material.dispose();
+                scene.remove(particleSystem);
+            }
+            if (renderer) {
+                renderer.dispose();
+                renderer.forceContextLoss();
+                renderer.domElement.remove();
+            }
+            if (composer) {
+                composer.dispose();
+            }
+        }
+
+        // Listen for page unload to cleanup
+        window.addEventListener('beforeunload', cleanup);
+
+        // Lively Wallpaper calls this when wallpaper is closed
+        window.livelyWallpaperPlaybackChanged = function (isPaused) {
+            if (isPaused) {
+                CONFIG.static = true;
+            } else {
+                CONFIG.static = false;
+            }
+        };
+
         // =============================================================================
         // LIVELY WALLPAPER INTEGRATION
         // =============================================================================
@@ -422,9 +512,12 @@
                     CONFIG.fps = parseInt(val);
                     break;
                 case 'theme':
-                    if (THEMES[val]) {
-                        CONFIG.color1 = THEMES[val].color1;
-                        CONFIG.color2 = THEMES[val].color2;
+                    // Lively sends dropdown index, convert to theme name
+                    const themeList = ['ocean', 'sunset', 'forest', 'cosmic', 'fire', 'aurora', 'midnight', 'cherry'];
+                    const themeName = typeof val === 'number' ? themeList[val] : val;
+                    if (THEMES[themeName]) {
+                        CONFIG.color1 = THEMES[themeName].color1;
+                        CONFIG.color2 = THEMES[themeName].color2;
                         particleSystem.material.uniforms.uColorA.value.set(CONFIG.color1);
                         particleSystem.material.uniforms.uColorB.value.set(CONFIG.color2);
                     }
@@ -435,24 +528,42 @@
                 case 'speed':
                     CONFIG.speed = parseFloat(val);
                     break;
+                case 'motion':
+                    CONFIG.motion = parseFloat(val);
+                    break;
+                case 'static':
+                    CONFIG.static = val;
+                    break;
                 // Text properties
                 case 'text':
                     updateText(val);
                     break;
                 case 'textFont':
-                    if (textElement && FONTS[val]) {
-                        textElement.style.fontFamily = FONTS[val];
+                    // Lively sends dropdown index
+                    const fontList = ['Great Vibes', 'Pinyon Script', 'Alex Brush', 'Tangerine', 'Dancing Script'];
+                    const fontName = typeof val === 'number' ? fontList[val] : val;
+                    if (textElement && FONTS[fontName]) {
+                        textElement.style.fontFamily = FONTS[fontName];
                     }
                     break;
                 case 'textSize':
+                    // Lively sends dropdown index
+                    const sizeList = ['4vw', '6vw', '8vw', '10vw', '12vw', '15vw'];
+                    const sizeVal = typeof val === 'number' ? sizeList[val] : val;
                     if (textElement) {
-                        textElement.style.fontSize = val;
+                        textElement.style.fontSize = sizeVal;
                     }
                     break;
                 case 'textColor':
                     if (textElement) {
                         textElement.style.color = val.startsWith('#') ? val : '#' + val;
                     }
+                    break;
+                case 'textPosition':
+                    // Lively sends dropdown index
+                    const positionList = ['top', 'center', 'bottom'];
+                    const posVal = typeof val === 'number' ? positionList[val] : val;
+                    updateTextPosition(posVal);
                     break;
                 case 'textGlow':
                     if (textElement) {
