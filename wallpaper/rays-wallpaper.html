@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rays Wallpaper</title>
+
+    <!-- Calligraphic Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Pinyon+Script&family=Alex+Brush&family=Tangerine:wght@400;700&family=Dancing+Script:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Calligraphic Text Overlay */
+        #text-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #custom-text {
+            font-family: 'Great Vibes', 'Pinyon Script', cursive;
+            font-size: clamp(3rem, 8vw, 8rem);
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            text-shadow:
+                0 0 20px rgba(255, 255, 255, 0.5),
+                0 0 40px rgba(255, 255, 255, 0.3),
+                0 0 60px rgba(255, 255, 255, 0.2);
+            letter-spacing: 0.05em;
+            line-height: 1.4;
+            max-width: 90%;
+            animation: textGlow 4s ease-in-out infinite alternate;
+            white-space: pre-line;
+        }
+
+        @keyframes textGlow {
+            0% {
+                text-shadow:
+                    0 0 20px rgba(255, 255, 255, 0.4),
+                    0 0 40px rgba(255, 255, 255, 0.2),
+                    0 0 60px rgba(255, 255, 255, 0.1);
+                opacity: 0.85;
+            }
+
+            100% {
+                text-shadow:
+                    0 0 30px rgba(255, 255, 255, 0.6),
+                    0 0 50px rgba(255, 255, 255, 0.4),
+                    0 0 80px rgba(255, 255, 255, 0.3);
+                opacity: 1;
+            }
+        }
+
+        /* Hide text if empty */
+        #custom-text:empty {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Text Overlay -->
+    <div id="text-overlay">
+        <div id="custom-text"></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // =============================================================================
+        // CONFIGURATION - URL Parameters & Defaults
+        // =============================================================================
+
+        const params = new URLSearchParams(window.location.search);
+
+        const CONFIG = {
+            // Performance
+            particles: clamp(parseInt(params.get('particles')) || 5000, 1000, 15000),
+            fps: parseInt(params.get('fps')) || 30,
+            bloom: params.get('bloom') !== 'off',
+            pixelRatio: Math.min(window.devicePixelRatio, 1.5),
+
+            // Visuals
+            speed: clamp(parseFloat(params.get('speed')) || 0.15, 0.05, 1.0),
+            baseSize: clamp(parseFloat(params.get('size')) || 2.5, 0.5, 8.0),
+            bloomStrength: clamp(parseFloat(params.get('bloomStrength')) || 1.0, 0.0, 2.5),
+
+            // Colors (theme or custom)
+            theme: params.get('theme') || 'ocean',
+            color1: params.get('color1') ? '#' + params.get('color1') : null,
+            color2: params.get('color2') ? '#' + params.get('color2') : null,
+
+            // Text overlay
+            text: decodeURIComponent(params.get('text') || ''),
+            textFont: params.get('textFont') || 'Great Vibes',
+            textSize: params.get('textSize') || '8vw',
+            textColor: params.get('textColor') ? '#' + params.get('textColor') : 'rgba(255, 255, 255, 0.9)',
+            textGlow: params.get('textGlow') !== 'off'
+        };
+
+        // Color presets
+        const THEMES = {
+            ocean: { color1: '#0066cc', color2: '#00ffcc' },
+            sunset: { color1: '#ff6b35', color2: '#9b59b6' },
+            forest: { color1: '#27ae60', color2: '#16a085' },
+            cosmic: { color1: '#9b59b6', color2: '#e91e63' },
+            fire: { color1: '#ff4500', color2: '#ffd700' },
+            aurora: { color1: '#00d4ff', color2: '#7b2ff7' },
+            midnight: { color1: '#1a1a2e', color2: '#4a00e0' },
+            cherry: { color1: '#ff0844', color2: '#ffb199' }
+        };
+
+        // Apply theme or custom colors
+        const theme = THEMES[CONFIG.theme.toLowerCase()] || THEMES.ocean;
+        CONFIG.color1 = CONFIG.color1 || theme.color1;
+        CONFIG.color2 = CONFIG.color2 || theme.color2;
+
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        // =============================================================================
+        // SHADERS
+        // =============================================================================
+
+        const vertexShader = `
+            uniform float uTime;
+            uniform float uAmbient;
+            uniform vec3 uColorA;
+            uniform vec3 uColorB;
+            uniform float uSizeMult;
+
+            attribute float aScale;
+            attribute vec3 aRandom;
+            
+            varying vec3 vColor;
+
+            void main() {
+                vec3 pos = position;
+                float spreadX = 40.0; 
+                float spreadY = 25.0;
+                float spreadZ = 20.0;
+
+                vec3 initialPos;
+                initialPos.x = (aRandom.x - 0.5) * spreadX;
+                initialPos.y = (aRandom.y - 0.5) * spreadY;
+                initialPos.z = (aRandom.z - 0.5) * spreadZ - 2.0; 
+
+                float angle = uTime * 0.5 + aRandom.x * 2.0;
+                float c = cos(angle);
+                float s = sin(angle);
+
+                pos.x = initialPos.x * c - initialPos.z * s;
+                pos.z = initialPos.x * s + initialPos.z * c;
+                pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
+
+                // Ambient pulsing (replaces audio reactivity)
+                float pulse = sin(uTime * 0.8) * 0.5 + 0.5;
+                pulse *= uAmbient;
+                pos += normalize(pos) * pulse * 0.5 * aRandom.y;
+
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                
+                float ambientSize = pulse * 1.5;
+                gl_PointSize = (uSizeMult * aScale + ambientSize) * (30.0 / -mvPosition.z);
+                
+                float mixVal = pulse * 0.3 + aRandom.x;
+                vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
+            }
+        `;
+
+        const fragmentShader = `
+            varying vec3 vColor;
+            
+            void main() {
+                vec2 uv = gl_PointCoord.xy - 0.5;
+                float r = length(uv);
+                if(r > 0.5) discard;
+                float glow = 1.0 - (r * 2.0);
+                glow = pow(glow, 2.0);
+                gl_FragColor = vec4(vColor, glow);
+            }
+        `;
+
+        // =============================================================================
+        // MAIN APPLICATION
+        // =============================================================================
+
+        let camera, scene, renderer, composer, particleSystem;
+        let customTime = 0;
+        let lastFrameTime = 0;
+        const frameInterval = 1000 / CONFIG.fps;
+
+        const clock = new THREE.Clock();
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 0, 6);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(CONFIG.pixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // Particles
+            setupParticles();
+
+            // Post-processing (optional)
+            if (CONFIG.bloom) {
+                setupPostProcessing();
+            }
+
+            // Events
+            window.addEventListener('resize', onResize);
+
+            // Lively Wallpaper property listener
+            if (window.livelyPropertyListener) {
+                window.livelyPropertyListener = handleLivelyProperty;
+            }
+
+            // Setup text overlay
+            setupText();
+
+            // Start animation
+            animate();
+        }
+
+        // =============================================================================
+        // TEXT OVERLAY
+        // =============================================================================
+
+        const FONTS = {
+            'Great Vibes': "'Great Vibes', cursive",
+            'Pinyon Script': "'Pinyon Script', cursive",
+            'Alex Brush': "'Alex Brush', cursive",
+            'Tangerine': "'Tangerine', cursive",
+            'Dancing Script': "'Dancing Script', cursive"
+        };
+
+        function setupText() {
+            const textElement = document.getElementById('custom-text');
+            if (!textElement) return;
+
+            // Set text content
+            textElement.textContent = CONFIG.text;
+
+            // Apply font
+            const fontFamily = FONTS[CONFIG.textFont] || FONTS['Great Vibes'];
+            textElement.style.fontFamily = fontFamily;
+
+            // Apply size
+            textElement.style.fontSize = CONFIG.textSize;
+
+            // Apply color
+            textElement.style.color = CONFIG.textColor;
+
+            // Toggle glow animation
+            if (!CONFIG.textGlow) {
+                textElement.style.animation = 'none';
+                textElement.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.3)';
+            }
+        }
+
+        function updateText(newText) {
+            const textElement = document.getElementById('custom-text');
+            if (textElement) {
+                textElement.textContent = newText;
+                CONFIG.text = newText;
+            }
+        }
+
+        function setupParticles() {
+            const geometry = new THREE.BufferGeometry();
+            const count = CONFIG.particles;
+
+            const positions = new Float32Array(count * 3);
+            const scales = new Float32Array(count);
+            const randoms = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = 0;
+                positions[i * 3 + 1] = 0;
+                positions[i * 3 + 2] = 0;
+                scales[i] = Math.random();
+                randoms[i * 3] = Math.random();
+                randoms[i * 3 + 1] = Math.random();
+                randoms[i * 3 + 2] = Math.random();
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uAmbient: { value: 1.0 },
+                    uColorA: { value: new THREE.Color(CONFIG.color1) },
+                    uColorB: { value: new THREE.Color(CONFIG.color2) },
+                    uSizeMult: { value: CONFIG.baseSize }
+                },
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        function setupPostProcessing() {
+            const renderPass = new RenderPass(scene, camera);
+            const bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight),
+                CONFIG.bloomStrength,
+                0.4,
+                0.85
+            );
+            bloomPass.threshold = 0.1;
+            bloomPass.radius = 0.5;
+
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderPass);
+            composer.addPass(bloomPass);
+        }
+
+        function animate(timestamp = 0) {
+            requestAnimationFrame(animate);
+
+            // FPS limiting
+            const elapsed = timestamp - lastFrameTime;
+            if (elapsed < frameInterval) return;
+            lastFrameTime = timestamp - (elapsed % frameInterval);
+
+            const delta = clock.getDelta();
+            customTime += delta * CONFIG.speed;
+
+            if (particleSystem) {
+                particleSystem.material.uniforms.uTime.value = customTime;
+            }
+
+            if (composer && CONFIG.bloom) {
+                composer.render();
+            } else {
+                renderer.render(scene, camera);
+            }
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (composer) {
+                composer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+
+        // =============================================================================
+        // LIVELY WALLPAPER INTEGRATION
+        // =============================================================================
+
+        function handleLivelyProperty(name, val) {
+            const textElement = document.getElementById('custom-text');
+
+            switch (name) {
+                case 'particles':
+                    // Would need to rebuild particle system
+                    break;
+                case 'fps':
+                    CONFIG.fps = parseInt(val);
+                    break;
+                case 'theme':
+                    if (THEMES[val]) {
+                        CONFIG.color1 = THEMES[val].color1;
+                        CONFIG.color2 = THEMES[val].color2;
+                        particleSystem.material.uniforms.uColorA.value.set(CONFIG.color1);
+                        particleSystem.material.uniforms.uColorB.value.set(CONFIG.color2);
+                    }
+                    break;
+                case 'bloom':
+                    CONFIG.bloom = val;
+                    break;
+                case 'speed':
+                    CONFIG.speed = parseFloat(val);
+                    break;
+                // Text properties
+                case 'text':
+                    updateText(val);
+                    break;
+                case 'textFont':
+                    if (textElement && FONTS[val]) {
+                        textElement.style.fontFamily = FONTS[val];
+                    }
+                    break;
+                case 'textSize':
+                    if (textElement) {
+                        textElement.style.fontSize = val;
+                    }
+                    break;
+                case 'textColor':
+                    if (textElement) {
+                        textElement.style.color = val.startsWith('#') ? val : '#' + val;
+                    }
+                    break;
+                case 'textGlow':
+                    if (textElement) {
+                        if (val) {
+                            textElement.style.animation = 'textGlow 4s ease-in-out infinite alternate';
+                        } else {
+                            textElement.style.animation = 'none';
+                            textElement.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.3)';
+                        }
+                    }
+                    break;
+            }
+        }
+
+        // Expose for Lively
+        window.livelyPropertyListener = handleLivelyProperty;
+
+        // Auto-start immediately
+        init();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,104 @@
+{
+    "theme": {
+        "text": "Color Theme",
+        "type": "dropdown",
+        "value": "ocean",
+        "items": [
+            "ocean",
+            "sunset",
+            "forest",
+            "cosmic",
+            "fire",
+            "aurora",
+            "midnight",
+            "cherry"
+        ]
+    },
+    "particles": {
+        "text": "Particle Count",
+        "type": "slider",
+        "value": 5000,
+        "min": 1000,
+        "max": 15000,
+        "step": 1000
+    },
+    "fps": {
+        "text": "FPS Limit",
+        "type": "dropdown",
+        "value": "30",
+        "items": [
+            "15",
+            "30",
+            "60"
+        ]
+    },
+    "speed": {
+        "text": "Animation Speed",
+        "type": "slider",
+        "value": 0.15,
+        "min": 0.05,
+        "max": 0.5,
+        "step": 0.05
+    },
+    "bloom": {
+        "text": "Bloom/Glow Effect",
+        "type": "checkbox",
+        "value": true
+    },
+    "bloomStrength": {
+        "text": "Bloom Intensity",
+        "type": "slider",
+        "value": 1.0,
+        "min": 0.0,
+        "max": 2.5,
+        "step": 0.1
+    },
+    "size": {
+        "text": "Particle Size",
+        "type": "slider",
+        "value": 2.5,
+        "min": 0.5,
+        "max": 8.0,
+        "step": 0.5
+    },
+    "text": {
+        "text": "Custom Text",
+        "type": "textbox",
+        "value": ""
+    },
+    "textFont": {
+        "text": "Text Font",
+        "type": "dropdown",
+        "value": "Great Vibes",
+        "items": [
+            "Great Vibes",
+            "Pinyon Script",
+            "Alex Brush",
+            "Tangerine",
+            "Dancing Script"
+        ]
+    },
+    "textSize": {
+        "text": "Text Size",
+        "type": "dropdown",
+        "value": "8vw",
+        "items": [
+            "4vw",
+            "6vw",
+            "8vw",
+            "10vw",
+            "12vw",
+            "15vw"
+        ]
+    },
+    "textColor": {
+        "text": "Text Color",
+        "type": "color",
+        "value": "#FFFFFF"
+    },
+    "textGlow": {
+        "text": "Text Glow Animation",
+        "type": "checkbox",
+        "value": true
+    }
+}
