@@ -1,6 +1,6 @@
 # Rays - Particle Wallpaper
 
-![Rays Wallpaper Preview](file:///C:/Users/user/.gemini/antigravity/brain/36584f3b-4d03-4eeb-ab25-3ff4e71c4790/rays_wallpaper_preview_1766327239917.png)
+![Rays Wallpaper Preview](./preview/preview.png)
 
 A stunning WebGL particle visualization optimized for Lively Wallpaper.
 
