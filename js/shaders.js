@@ -9,11 +9,9 @@
 
 export const particleVertexShader = `
     uniform float uTime;
-    uniform float uAudioTotal;
     uniform vec3 uColorA;
     uniform vec3 uColorB;
     uniform float uSizeMult;
-    uniform float uAudioStrength;
 
     attribute float aScale;
     attribute vec3 aRandom;
@@ -39,16 +37,12 @@ export const particleVertexShader = `
         pos.z = initialPos.x * s + initialPos.z * c;
         pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
 
-        pos += normalize(pos) * uAudioTotal * 2.0 * aRandom.y * uAudioStrength;
-
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         
-        float audioSize = (uAudioTotal * 3.0) * uAudioStrength;
-        gl_PointSize = (uSizeMult * aScale + audioSize) * (30.0 / -mvPosition.z);
+        gl_PointSize = (uSizeMult * aScale) * (30.0 / -mvPosition.z);
         
-        float mixVal = (uAudioTotal * uAudioStrength * 0.5) + aRandom.x;
-        vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
+        vColor = mix(uColorA, uColorB, aRandom.x);
     }
 `;
 
@@ -83,8 +77,6 @@ export const fractalVertexShader = `
 export const fractalFragmentShader = `
     uniform float uTime;
     uniform vec2 uResolution;
-    uniform float uAudioTotal;
-    uniform float uAudioLow;
     
     varying vec2 vUv;
     varying vec3 vPosition;
@@ -95,7 +87,7 @@ export const fractalFragmentShader = `
         float dzlen = 1.0;
         float r = 0.0;
         float dr = 1.0;
-        float power = 8.0 + (uAudioLow * 4.0); 
+        float power = 8.0; 
 
         for(int i=0; i<8; i++) {
             r = length(w);
@@ -143,7 +135,6 @@ export const fractalFragmentShader = `
             vec3 p = ro + rd * t;
             vec3 normal = getNormal(p);
             vec3 baseColor = vec3(0.1, 0.6, 0.9);
-            baseColor = mix(baseColor, vec3(1.0, 0.2, 0.4), uAudioLow); 
             float light = max(dot(normal, vec3(0.5, 0.8, 0.5)), 0.0);
             float rim = pow(1.0 - max(dot(normal, -rd), 0.0), 3.0);
             color = baseColor * (light * 0.5 + 0.2) + rim * 2.0;

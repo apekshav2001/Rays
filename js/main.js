@@ -25,7 +25,6 @@ import {
 } from './config.js';
 
 import { particleVertexShader, particleFragmentShader } from './shaders.js';
-import { AudioAnalyzer, AmbientMode } from './audio.js';
 import { UIController } from './ui.js';
 
 // =============================================================================
@@ -34,20 +33,12 @@ import { UIController } from './ui.js';
 
 let camera, scene, renderer, composer;
 let particleSystem;
-let audioSource; // AudioAnalyzer or AmbientMode
 let uiController;
 let customTime = 0;
 let isRunning = false;
 
 const clock = new THREE.Clock();
 const params = { ...DEFAULT_PARAMS };
-
-const audioUniforms = {
-    uAudioLow: { value: 0.0 },
-    uAudioMid: { value: 0.0 },
-    uAudioHigh: { value: 0.0 },
-    uAudioTotal: { value: 0.0 }
-};
 
 // =============================================================================
 // INITIALIZATION
@@ -65,9 +56,6 @@ async function init() {
     // Setup UI controller first
     uiController = new UIController();
     uiController.cacheElements();
-
-    // Setup audio (with fallback)
-    await setupAudio();
 
     // Setup Three.js scene
     setupScene();
@@ -88,25 +76,6 @@ async function init() {
     animate();
 }
 
-/**
- * Setup audio capture with graceful fallback
- */
-async function setupAudio() {
-    const analyzer = new AudioAnalyzer();
-    const result = await analyzer.init();
-
-    if (result.success) {
-        audioSource = analyzer;
-        uiController.updateMicStatus('Active', true);
-        uiController.updateDeviceName(result.deviceName);
-    } else {
-        // Fallback to ambient mode
-        audioSource = new AmbientMode();
-        uiController.updateMicStatus('Ambient Mode', false);
-        uiController.updateDeviceName('No microphone');
-        uiController.showNotification('Running in ambient mode (no mic access)', 'info');
-    }
-}
 
 /**
  * Setup Three.js scene
@@ -140,9 +109,17 @@ function setupScene() {
 
 /**
  * Setup particle system
+ * @param {number} count - Number of particles
  */
-function setupParticles() {
-    const particleCount = getParticleCount();
+function setupParticles(count) {
+    // Cleanup old system if exists
+    if (particleSystem) {
+        scene.remove(particleSystem);
+        particleSystem.geometry.dispose();
+        particleSystem.material.dispose();
+    }
+
+    const particleCount = count || getParticleCount();
     const geometry = new THREE.BufferGeometry();
 
     const positions = new Float32Array(particleCount * 3);
@@ -168,11 +145,9 @@ function setupParticles() {
         fragmentShader: particleFragmentShader,
         uniforms: {
             uTime: { value: 0 },
-            uAudioTotal: audioUniforms.uAudioTotal,
             uColorA: { value: new THREE.Color(params.color1) },
             uColorB: { value: new THREE.Color(params.color2) },
-            uSizeMult: { value: params.baseSize },
-            uAudioStrength: { value: params.audioStrength }
+            uSizeMult: { value: params.baseSize }
         },
         transparent: true,
         depthWrite: false,
@@ -245,11 +220,6 @@ function setupGUI() {
         particleSystem.material.uniforms.uSizeMult.value = v;
     });
 
-    // Audio
-    const folderAudio = gui.addFolder('Audio');
-    folderAudio.add(params, 'audioStrength', 0.0, 3.0).name('React Strength').onChange(v => {
-        particleSystem.material.uniforms.uAudioStrength.value = v;
-    });
 
     // Glow
     const folderBloom = gui.addFolder('Glow');
@@ -257,10 +227,18 @@ function setupGUI() {
         window.bloomPass.strength = v;
     });
 
-    // Performance
-    const folderPerf = gui.addFolder('Performance');
-    folderPerf.add(params, 'lowFpsMode').name('30 FPS Mode').onChange(v => {
-        uiController.targetFps = v ? 30 : 60;
+    // Text
+    const folderText = gui.addFolder('Text Settings');
+    folderText.add(params, 'text').name('Custom Text').onChange(v => {
+        const el = document.getElementById('custom-text');
+        if (el) el.textContent = v;
+    });
+    folderText.add(params, 'textFont', Object.keys(FONTS)).name('Font').onChange(v => {
+        const el = document.getElementById('custom-text');
+        if (el) el.style.fontFamily = FONTS[v];
+    });
+    folderText.add(params, 'textPosition', ['top', 'center', 'bottom']).name('Position').onChange(v => {
+        updateTextPosition(v);
     });
 }
 
@@ -282,20 +260,6 @@ function animate(timestamp = 0) {
 
     const delta = clock.getDelta();
 
-    // Update audio
-    const audioData = audioSource.update(delta);
-    audioUniforms.uAudioTotal.value = audioData.total;
-    audioUniforms.uAudioLow.value = audioData.low;
-    audioUniforms.uAudioMid.value = audioData.mid;
-    audioUniforms.uAudioHigh.value = audioData.high;
-
-    // Update volume bar
-    uiController.updateVolumeBar(audioData.volume);
-
-    // Show hint if no audio
-    const noAudio = audioData.volume === 0 && audioSource instanceof AudioAnalyzer;
-    uiController.showHint(noAudio);
-
     // Update time
     customTime += delta * params.speed;
     if (particleSystem) {
@@ -315,15 +279,101 @@ function onWindowResize() {
     composer.setSize(window.innerWidth, window.innerHeight);
 }
 
-/**
- * Cleanup resources
- */
 function cleanup() {
     isRunning = false;
-    if (audioSource) audioSource.dispose();
     if (uiController) uiController.dispose();
     if (renderer) renderer.dispose();
 }
+
+const FONTS = {
+    'Great Vibes': "'Great Vibes', cursive",
+    'Pinyon Script': "'Pinyon Script', cursive",
+    'Alex Brush': "'Alex Brush', cursive",
+    'Tangerine': "'Tangerine', cursive",
+    'Dancing Script': "'Dancing Script', cursive"
+};
+
+function updateTextPosition(position) {
+    const overlay = document.getElementById('text-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('pos-top', 'pos-center', 'pos-bottom');
+    overlay.classList.add('pos-' + (position || 'center'));
+}
+
+/**
+ * Lively Wallpaper Property Listener
+ */
+window.livelyPropertyListener = (name, value) => {
+    const textElement = document.getElementById('custom-text');
+    switch (name) {
+        case 'theme':
+            const themes = Object.keys(COLOR_PRESETS);
+            const selectedTheme = themes[value];
+            if (selectedTheme && COLOR_PRESETS[selectedTheme]) {
+                params.color1 = COLOR_PRESETS[selectedTheme].color1;
+                params.color2 = COLOR_PRESETS[selectedTheme].color2;
+                if (particleSystem) {
+                    particleSystem.material.uniforms.uColorA.value.set(params.color1);
+                    particleSystem.material.uniforms.uColorB.value.set(params.color2);
+                }
+            }
+            break;
+        case 'particles':
+            setupParticles(value);
+            break;
+        case 'fps':
+            const fpsMap = [15, 30, 60];
+            uiController.targetFps = fpsMap[value] || 60;
+            break;
+        case 'speed':
+            params.speed = value;
+            break;
+        case 'bloom':
+            if (window.bloomPass) window.bloomPass.enabled = value;
+            break;
+        case 'bloomStrength':
+            params.bloomStrength = value;
+            if (window.bloomPass) window.bloomPass.strength = value;
+            break;
+        case 'size':
+            params.baseSize = value;
+            if (particleSystem) {
+                particleSystem.material.uniforms.uSizeMult.value = value;
+            }
+            break;
+        case 'static':
+            isRunning = !value;
+            break;
+        case 'text':
+            if (textElement) textElement.textContent = value;
+            break;
+        case 'textFont':
+            const fontList = ['Great Vibes', 'Pinyon Script', 'Alex Brush', 'Tangerine', 'Dancing Script'];
+            const fontName = typeof value === 'number' ? fontList[value] : value;
+            if (textElement && FONTS[fontName]) textElement.style.fontFamily = FONTS[fontName];
+            break;
+        case 'textSize':
+            const sizeList = ['4vw', '6vw', '8vw', '10vw', '12vw', '15vw'];
+            const sizeVal = typeof value === 'number' ? sizeList[value] : value;
+            if (textElement) textElement.style.fontSize = sizeVal;
+            break;
+        case 'textPosition':
+            const positionList = ['top', 'center', 'bottom'];
+            const posVal = typeof value === 'number' ? positionList[value] : value;
+            updateTextPosition(posVal);
+            break;
+        case 'textGlow':
+            if (textElement) {
+                textElement.style.animation = value ? 'textGlow 4s ease-in-out infinite alternate' : 'none';
+            }
+            break;
+    }
+
+    // Update GUI if visible
+    if (uiController && uiController.gui) {
+        uiController.updateGUIDisplay();
+    }
+};
 
 // =============================================================================
 // STARTUP

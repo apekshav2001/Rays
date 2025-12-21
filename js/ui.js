@@ -32,12 +32,7 @@ export function throttle(fn, delay) {
 export class UIController {
     constructor() {
         // Cached DOM elements
-        this.elements = {
-            volumeBar: null,
-            hintElement: null,
-            micStatus: null,
-            micName: null
-        };
+        this.elements = {};
 
         this.uiTimeout = null;
         this.guiVisible = false;
@@ -54,10 +49,7 @@ export class UIController {
      * Cache DOM elements (call once at init)
      */
     cacheElements() {
-        this.elements.volumeBar = document.getElementById('volume-bar');
-        this.elements.hintElement = document.getElementById('windows-hint');
-        this.elements.micStatus = document.getElementById('mic-status');
-        this.elements.micName = document.getElementById('mic-name');
+        // No elements to cache currently
     }
 
     /**
@@ -157,47 +149,6 @@ export class UIController {
         }
     }
 
-    /**
-     * Update volume bar display
-     * @param {number} volume - Volume level 0-1
-     */
-    updateVolumeBar(volume) {
-        if (this.elements.volumeBar) {
-            this.elements.volumeBar.style.width = Math.min(100, volume * 400) + '%';
-        }
-    }
-
-    /**
-     * Update microphone status display
-     * @param {string} status - Status text
-     * @param {boolean} isActive - Whether mic is active
-     */
-    updateMicStatus(status, isActive) {
-        if (this.elements.micStatus) {
-            this.elements.micStatus.innerText = status;
-            this.elements.micStatus.style.color = isActive ? '#0f0' : '#f00';
-        }
-    }
-
-    /**
-     * Update device name display
-     * @param {string} name - Device name
-     */
-    updateDeviceName(name) {
-        if (this.elements.micName) {
-            this.elements.micName.innerText = name;
-        }
-    }
-
-    /**
-     * Show/hide Windows hint
-     * @param {boolean} show - Whether to show hint
-     */
-    showHint(show) {
-        if (this.elements.hintElement) {
-            this.elements.hintElement.style.display = show ? 'block' : 'none';
-        }
-    }
 
     /**
      * Show notification message

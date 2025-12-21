@@ -47,10 +47,12 @@ export const DEFAULT_PARAMS = {
     color2: '#ffcc66',      // Secondary color (gold)
     baseSize: 3.0,          // Base particle size
     speed: 0.2,             // Animation speed multiplier
-    audioStrength: 1.0,     // Audio reactivity (0 = off, 1 = normal)
     bloomStrength: 1.2,     // Bloom/glow intensity
     preset: 'Custom',       // Current color preset name
-    lowFpsMode: false       // Battery saving mode
+    lowFpsMode: false,      // Battery saving mode
+    text: 'Rays',           // Default text
+    textFont: 'Great Vibes', // Default font
+    textPosition: 'center'  // Default position
 };
 
 // =============================================================================
@@ -58,13 +60,16 @@ export const DEFAULT_PARAMS = {
 // =============================================================================
 
 export const COLOR_PRESETS = {
-    'Custom': null,
     'Ocean': { color1: '#0066cc', color2: '#00ffcc' },
     'Sunset': { color1: '#ff6b35', color2: '#9b59b6' },
     'Forest': { color1: '#27ae60', color2: '#16a085' },
     'Cosmic': { color1: '#9b59b6', color2: '#e91e63' },
     'Fire': { color1: '#ff4500', color2: '#ffd700' },
-    'Aurora': { color1: '#00d4ff', color2: '#7b2ff7' }
+    'Aurora': { color1: '#00d4ff', color2: '#7b2ff7' },
+    'Midnight': { color1: '#1a1a2e', color2: '#16213e' },
+    'Cherry': { color1: '#e91e63', color2: '#ffb7c5' },
+    'Universe': { color1: '#ffffff', color2: '#ffffff' },
+    'Custom': null
 };
 
 // =============================================================================
@@ -75,7 +80,7 @@ export const COLOR_PRESETS = {
 export const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 /** Check if user prefers reduced motion */
-export const prefersReducedMotion = () => 
+export const prefersReducedMotion = () =>
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Get optimal particle count based on device */

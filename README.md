@@ -1,43 +1,34 @@
-# Rays - Audio Reactive Particles
+# Rays - Particle Wallpaper
 
-A beautiful WebGL particle visualization that reacts to audio input.
+![Rays Wallpaper Preview](file:///C:/Users/user/.gemini/antigravity/brain/36584f3b-4d03-4eeb-ab25-3ff4e71c4790/rays_wallpaper_preview_1766327239917.png)
 
-## Quick Start
+A stunning WebGL particle visualization optimized for Lively Wallpaper.
 
-### Option 1: Using Live Server (Recommended)
+## Lively Wallpaper Setup
 
-If you have Visual Studio Code:
-1. Install the "Live Server" extension
-2. Right-click on `index.html` → "Open with Live Server"
+To use this as a live wallpaper on your desktop:
 
-### Option 2: Using Python (built-in)
-
-```bash
-# Python 3
-cd Rays
-python -m http.server 8080
-
-# Then open: http://localhost:8080
-```
-
-### Option 3: Using Node.js
-
-```bash
-# Install serve globally (one-time)
-npm install -g serve
-
-# Run server
-cd Rays
-serve .
-
-# Then open: http://localhost:3000
-```
-
-### Option 4: Double-Click (Legacy Mode)
-
-Open `index-standalone.html` for a single-file version that works with `file://`
+1.  **Download & Install** [Lively Wallpaper](https://rocksdanister.github.io/lively/) if you haven't already.
+2.  **Open Lively Wallpaper**.
+3.  **Add Wallpaper**: Click the "+" (Add) icon in the top left.
+4.  **Select File**: Click "Browse" and navigate to the `Rays` folder.
+5.  **Target File**: Select `wallpaper/rays-wallpaper.html`. (Alternatively, you can drag and drop the folder into Lively).
+6.  **Customize**: Once active, right-click the wallpaper in Lively → "Customise Wallpaper" to adjust:
+    - **Custom Text**: Add your own message (e.g., "Hello World", "Stay Focused").
+    - **Particle Size & Count**: Control the density and scale of the nebula.
+    - **Color Themes**: Includes the new "Universe" theme (pure white) and others like Ocean, Cosmic, and Sunset.
+    - **Bloom/Glow Intensity**: Adjust the ethereal glow effect.
+    - **Animation Speed & Motion**: Control how fast and how much the particles move.
 
 ---
+
+## Other Usage Options
+
+### Local Development / Browser
+
+- **Option 1 (Recommended)**: Right-click `index.html` → "Open with Live Server" (VS Code extension).
+- **Option 2 (Python)**: `python -m http.server 8080` in the project root.
+- **Option 3 (Standalone)**: Open `standalone.html` directly in any browser for a zero-setup experience.
 
 ## Keyboard Shortcuts
 
@@ -47,28 +38,27 @@ Open `index-standalone.html` for a single-file version that works with `file://`
 | `H` | Toggle settings panel |
 | `P` | Toggle 30fps battery mode |
 
-## Color Presets
-
-- Ocean, Sunset, Forest, Cosmic, Fire, Aurora
-
 ## Project Structure
 
 ```
 Rays/
-├── index.html          (main entry - needs server)
-├── index-standalone.html (single-file for file://)
+├── index.html          (Main browser entry)
+├── standalone.html      (Single-file browser version)
+├── wallpaper/
+│   ├── rays-wallpaper.html (Entry point for Lively)
+│   └── LivelyProperties.json (Settings configuration)
+├── js/
+│   ├── main.js         (Engine logic)
+│   ├── config.js       (Constants & presets)
+│   ├── shaders.js      (GLSL code)
+│   └── ui.js           (User interface)
 ├── css/
 │   └── styles.css
-├── js/
-│   ├── main.js         (entry point)
-│   ├── config.js       (constants & presets)
-│   ├── shaders.js      (GLSL code)
-│   ├── audio.js        (audio analyzer)
-│   └── ui.js           (UI controller)
 └── README.md
 ```
 
 ## Requirements
 
+- Windows 10/11 (for Lively Wallpaper)
 - Modern browser with WebGL support
-- Microphone access (optional - falls back to ambient mode)
+- GPU with decent performance for high particle counts

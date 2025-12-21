@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Great+Vibes&family=Pinyon+Script&family=Alex+Brush&family=Tangerine:wght@400;700&family=Dancing+Script:wght@400;700&display=swap"
         rel="stylesheet">
 
     <!-- Styles -->
@@ -27,25 +27,11 @@
         <p id="overlay-subtitle">Please wait...</p>
     </div>
 
-    <!-- Debug Panel -->
-    <div id="debug-panel" aria-hidden="true">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-            <span style="opacity: 0.6;">●</span>
-            <span id="mic-status">Initializing...</span>
-        </div>
-        <div style="opacity: 0.6; margin-bottom: 8px;">
-            <span id="mic-name">Audio Device</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="opacity: 0.6;">VOL</span>
-            <div id="volume-bar-container">
-                <div id="volume-bar" style="width: 0%;"></div>
-            </div>
-        </div>
-        <div id="windows-hint">
-            Check Windows Privacy → Microphone
-        </div>
+    <!-- Text Overlay -->
+    <div id="text-overlay">
+        <div id="custom-text"></div>
     </div>
+
 
     <!-- Keyboard Hints -->
     <div id="keyboard-hints" aria-label="Keyboard shortcuts">

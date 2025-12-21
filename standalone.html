@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Great+Vibes&family=Pinyon+Script&family=Alex+Brush&family=Tangerine:wght@400;700&family=Dancing+Script:wght@400;700&display=swap"
         rel="stylesheet">
 
     <style>
@@ -109,51 +109,61 @@
             z-index: 1;
         }
 
-        /* Debug Panel (Auto-hiding) */
-        #debug-panel {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: rgba(255, 255, 255, 0.7);
-            font-family: 'SF Mono', 'Consolas', monospace;
-            font-size: 12px;
-            z-index: 5;
-            pointer-events: none;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 12px 16px;
-            border-radius: 8px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        body.show-ui #debug-panel {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        #volume-bar-container {
-            width: 120px;
-            height: 4px;
-            border-radius: 2px;
-            background: rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        #volume-bar {
+        /* Text Overlay */
+        #text-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, #3380ff, #66ffcc);
-            border-radius: 2px;
-            transition: width 0.05s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
         }
 
-        #windows-hint {
-            color: #ffaa00;
+        #text-overlay.pos-top {
+            align-items: flex-start;
+            padding-top: 8vh;
+        }
+
+        #text-overlay.pos-center {
+            align-items: center;
+        }
+
+        #text-overlay.pos-bottom {
+            align-items: flex-end;
+            padding-bottom: 8vh;
+        }
+
+        #custom-text {
+            font-family: 'Great Vibes', 'Pinyon Script', cursive;
+            font-size: clamp(2.5rem, 7vw, 7rem);
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            letter-spacing: 0.05em;
+            line-height: 1.4;
+            max-width: 90%;
+            animation: textGlow 4s ease-in-out infinite alternate;
+            white-space: pre-line;
+        }
+
+        @keyframes textGlow {
+            0% {
+                text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+                opacity: 0.85;
+            }
+
+            100% {
+                text-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+                opacity: 1;
+            }
+        }
+
+        #custom-text:empty {
             display: none;
-            margin-top: 8px;
-            font-size: 11px;
         }
 
         /* Keyboard Hints */
@@ -265,21 +275,8 @@
         <p id="overlay-subtitle">Click anywhere to begin</p>
     </div>
 
-    <div id="debug-panel" aria-hidden="true">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-            <span style="opacity: 0.6;">●</span>
-            <span id="mic-status">Initializing...</span>
-        </div>
-        <div style="opacity: 0.6; margin-bottom: 8px;">
-            <span id="mic-name">Audio Device</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="opacity: 0.6;">VOL</span>
-            <div id="volume-bar-container">
-                <div id="volume-bar" style="width: 0%;"></div>
-            </div>
-        </div>
-        <div id="windows-hint">Check Windows Privacy → Microphone</div>
+    <div id="text-overlay">
+        <div id="custom-text"></div>
     </div>
 
     <div id="keyboard-hints" aria-label="Keyboard shortcuts">
@@ -329,13 +326,16 @@
         };
 
         const COLOR_PRESETS = {
-            'Custom': null,
             'Ocean': { color1: '#0066cc', color2: '#00ffcc' },
             'Sunset': { color1: '#ff6b35', color2: '#9b59b6' },
             'Forest': { color1: '#27ae60', color2: '#16a085' },
             'Cosmic': { color1: '#9b59b6', color2: '#e91e63' },
             'Fire': { color1: '#ff4500', color2: '#ffd700' },
-            'Aurora': { color1: '#00d4ff', color2: '#7b2ff7' }
+            'Aurora': { color1: '#00d4ff', color2: '#7b2ff7' },
+            'Midnight': { color1: '#1a1a2e', color2: '#16213e' },
+            'Cherry': { color1: '#e91e63', color2: '#ffb7c5' },
+            'Universe': { color1: '#ffffff', color2: '#ffffff' },
+            'Custom': null
         };
 
         const isMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -346,11 +346,9 @@
         // =====================================================================
         const particleVertexShader = `
             uniform float uTime;
-            uniform float uAudioTotal;
             uniform vec3 uColorA;
             uniform vec3 uColorB;
             uniform float uSizeMult;
-            uniform float uAudioStrength;
             attribute float aScale;
             attribute vec3 aRandom;
             varying vec3 vColor;
@@ -370,16 +368,13 @@
                 pos.x = initialPos.x * c - initialPos.z * s;
                 pos.z = initialPos.x * s + initialPos.z * c;
                 pos.y = initialPos.y + sin(uTime + aRandom.z * 10.0) * 0.5;
-                pos += normalize(pos) * uAudioTotal * 2.0 * aRandom.y * uAudioStrength;
 
                 vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
                 
-                float audioSize = (uAudioTotal * 3.0) * uAudioStrength;
-                gl_PointSize = (uSizeMult * aScale + audioSize) * (30.0 / -mvPosition.z);
+                gl_PointSize = (uSizeMult * aScale) * (30.0 / -mvPosition.z);
                 
-                float mixVal = (uAudioTotal * uAudioStrength * 0.5) + aRandom.x;
-                vColor = mix(uColorA, uColorB, clamp(mixVal, 0.0, 1.0));
+                vColor = mix(uColorA, uColorB, aRandom.x);
             }
         `;
 
@@ -396,38 +391,16 @@
         `;
 
         // =====================================================================
-        // GLOBALS
+        // =====================================================================
+        // GLOBALS & UTILITIES
         // =====================================================================
         let camera, scene, renderer, composer, particleSystem, bloomPass;
-        let analyser, dataArray, audioStream;
-        let customTime = 0, isAmbientMode = false;
+        let customTime = 0;
         let uiTimeout, guiVisible = false, targetFps = 60, lastFrameTime = 0;
-
-        // Cached DOM elements
-        let volumeBar, hintElement, micStatus, micName;
+        let isRunning = false;
 
         const clock = new THREE.Clock();
-        const params = {
-            color1: '#3380ff',
-            color2: '#ffcc66',
-            baseSize: 3.0,
-            speed: 0.2,
-            audioStrength: 1.0,
-            bloomStrength: 1.2,
-            preset: 'Custom',
-            lowFpsMode: false
-        };
 
-        const audioUniforms = {
-            uAudioLow: { value: 0.0 },
-            uAudioMid: { value: 0.0 },
-            uAudioHigh: { value: 0.0 },
-            uAudioTotal: { value: 0.0 }
-        };
-
-        // =====================================================================
-        // UTILITIES
-        // =====================================================================
         function throttle(fn, delay) {
             let lastCall = 0;
             return (...args) => {
@@ -454,6 +427,7 @@
         function showNotification(message, type = 'info') {
             const colors = { info: '#3380ff', warning: '#ffaa00', error: '#ff5555' };
             const notification = document.createElement('div');
+            notification.className = 'notification';
             notification.style.cssText = `
                 position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
                 background: rgba(0,0,0,0.8); color: ${colors[type]}; padding: 12px 24px;
@@ -465,94 +439,42 @@
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
+        const params = {
+            color1: '#3380ff',
+            color2: '#ffcc66',
+            baseSize: 3.0,
+            speed: 0.2,
+            bloomStrength: 1.2,
+            preset: 'Custom',
+            lowFpsMode: false,
+            text: 'Rays',
+            textFont: 'Great Vibes',
+            textPosition: 'center'
+        };
 
-        // =====================================================================
-        // AUDIO
-        // =====================================================================
-        async function setupAudio() {
-            try {
-                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const track = audioStream.getAudioTracks()[0];
-                micName.innerText = track.label || 'Default Audio Device';
-                micStatus.innerText = 'Active';
-                micStatus.style.color = '#0f0';
-
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-                const source = audioCtx.createMediaStreamSource(audioStream);
-                analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
-                source.connect(analyser);
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-            } catch (err) {
-                console.warn('Microphone unavailable, using ambient mode:', err);
-                isAmbientMode = true;
-                micStatus.innerText = 'Ambient Mode';
-                micStatus.style.color = '#ffaa00';
-                micName.innerText = 'No microphone';
-                showNotification('Running in ambient mode (no mic access)', 'info');
-            }
-        }
-
-        function updateAudio() {
-            let low = 0, mid = 0, high = 0, total = 0, volume = 0;
-
-            if (isAmbientMode) {
-                // Ambient mode: gentle pulsing
-                const t = clock.getElapsedTime();
-                const wave1 = (Math.sin(t * 0.5) + 1) * 0.15;
-                const wave2 = (Math.sin(t * 0.3 + 1) + 1) * 0.1;
-                total = wave1 + wave2 * 0.5;
-                low = wave1;
-                volume = wave1;
-            } else if (analyser) {
-                analyser.getByteFrequencyData(dataArray);
-                const binCount = analyser.frequencyBinCount;
-
-                for (let i = 0; i < binCount; i++) {
-                    const val = dataArray[i] / 255.0;
-                    total += val;
-                    if (i < binCount / 3) low += val;
-                    else if (i < 2 * binCount / 3) mid += val;
-                    else high += val;
-                }
-                volume = total / binCount;
-                total = (total / binCount) * 4.0;
-                low = (low / (binCount / 3)) * 2.0;
-            }
-
-            // Update uniforms with smoothing
-            audioUniforms.uAudioTotal.value = THREE.MathUtils.lerp(audioUniforms.uAudioTotal.value, total, 0.1);
-            audioUniforms.uAudioLow.value = THREE.MathUtils.lerp(audioUniforms.uAudioLow.value, low, 0.1);
-
-            // Update volume bar
-            if (volumeBar) volumeBar.style.width = Math.min(100, volume * 400) + '%';
-
-            // Show hint if no audio and not ambient
-            if (!isAmbientMode && volume === 0 && audioUniforms.uAudioTotal.value === 0) {
-                if (hintElement) hintElement.style.display = 'block';
-            } else {
-                if (hintElement) hintElement.style.display = 'none';
-            }
-        }
+        const FONTS = {
+            'Great Vibes': "'Great Vibes', cursive",
+            'Pinyon Script': "'Pinyon Script', cursive",
+            'Alex Brush': "'Alex Brush', cursive",
+            'Tangerine': "'Tangerine', cursive",
+            'Dancing Script': "'Dancing Script', cursive"
+        };
 
         // =====================================================================
         // INITIALIZATION
         // =====================================================================
+        function updateTextPosition(position) {
+            const overlay = document.getElementById('text-overlay');
+            if (!overlay) return;
+            overlay.classList.remove('pos-top', 'pos-center', 'pos-bottom');
+            overlay.classList.add('pos-' + (position || 'center'));
+        }
+
         async function init() {
-            // Hide overlay
             const overlay = document.getElementById('overlay');
             overlay.style.opacity = '0';
             setTimeout(() => overlay.remove(), 800);
 
-            // Cache DOM elements
-            volumeBar = document.getElementById('volume-bar');
-            hintElement = document.getElementById('windows-hint');
-            micStatus = document.getElementById('mic-status');
-            micName = document.getElementById('mic-name');
-
-            await setupAudio();
             setupScene();
             setupParticles();
             setupPostProcessing();
@@ -560,6 +482,7 @@
             setupEventListeners();
 
             showUI();
+            isRunning = true;
             animate();
         }
 
@@ -603,11 +526,9 @@
                 fragmentShader: particleFragmentShader,
                 uniforms: {
                     uTime: { value: 0 },
-                    uAudioTotal: audioUniforms.uAudioTotal,
                     uColorA: { value: new THREE.Color(params.color1) },
                     uColorB: { value: new THREE.Color(params.color2) },
-                    uSizeMult: { value: params.baseSize },
-                    uAudioStrength: { value: params.audioStrength }
+                    uSizeMult: { value: params.baseSize }
                 },
                 transparent: true,
                 depthWrite: false,
@@ -667,10 +588,6 @@
                 particleSystem.material.uniforms.uSizeMult.value = v;
             });
 
-            // Audio
-            gui.addFolder('Audio').add(params, 'audioStrength', 0, 3).name('React Strength').onChange(v => {
-                particleSystem.material.uniforms.uAudioStrength.value = v;
-            });
 
             // Glow
             gui.addFolder('Glow').add(params, 'bloomStrength', 0, 3).name('Bloom').onChange(v => {
@@ -680,6 +597,20 @@
             // Performance
             gui.addFolder('Performance').add(params, 'lowFpsMode').name('30 FPS Mode').onChange(v => {
                 targetFps = v ? 30 : 60;
+            });
+
+            // Text Settings
+            const folderText = gui.addFolder('Text Settings');
+            folderText.add(params, 'text').name('Custom Text').onChange(v => {
+                const el = document.getElementById('custom-text');
+                if (el) el.textContent = v;
+            });
+            folderText.add(params, 'textFont', Object.keys(FONTS)).name('Font').onChange(v => {
+                const el = document.getElementById('custom-text');
+                if (el) el.style.fontFamily = FONTS[v];
+            });
+            folderText.add(params, 'textPosition', ['top', 'center', 'bottom']).name('Position').onChange(v => {
+                updateTextPosition(v);
             });
 
             window.raysGui = gui;
@@ -741,8 +672,8 @@
         // =====================================================================
         function animate(timestamp = 0) {
             requestAnimationFrame(animate);
+            if (!isRunning) return;
 
-            // FPS throttle
             if (params.lowFpsMode) {
                 const interval = 1000 / targetFps;
                 if (timestamp - lastFrameTime < interval) return;
@@ -750,8 +681,6 @@
             }
 
             const delta = clock.getDelta();
-            updateAudio();
-
             customTime += delta * params.speed;
             if (particleSystem) {
                 particleSystem.material.uniforms.uTime.value = customTime;

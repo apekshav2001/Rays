@@ -73,6 +73,7 @@ canvas {
         transform: scale(0.8);
         opacity: 1;
     }
+
     100% {
         transform: scale(1.5);
         opacity: 0;
@@ -101,55 +102,6 @@ p#overlay-subtitle {
     z-index: 1;
 }
 
-/* =============================================================================
-   DEBUG PANEL (Auto-hiding)
-   ============================================================================= */
-
-#debug-panel {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    color: rgba(255, 255, 255, 0.7);
-    font-family: 'SF Mono', 'Consolas', monospace;
-    font-size: 12px;
-    z-index: 5;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 12px 16px;
-    border-radius: 8px;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-body.show-ui #debug-panel {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-#volume-bar-container {
-    width: 120px;
-    height: 4px;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.1);
-    overflow: hidden;
-}
-
-#volume-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #3380ff, #66ffcc);
-    border-radius: 2px;
-    transition: width 0.05s;
-}
-
-#windows-hint {
-    color: #ffaa00;
-    display: none;
-    margin-top: 8px;
-    font-size: 11px;
-}
 
 /* =============================================================================
    KEYBOARD HINTS
@@ -205,10 +157,25 @@ body.gui-visible .lil-gui {
    ============================================================================= */
 
 @keyframes fadeInOut {
-    0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
-    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
-    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
-    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+
+    15% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    85% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
 }
 
 .notification {
@@ -220,11 +187,12 @@ body.gui-visible .lil-gui {
    ============================================================================= */
 
 @media (prefers-reduced-motion: reduce) {
+
     #overlay::before,
     #overlay::after {
         animation: none;
     }
-    
+
     * {
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
@@ -240,17 +208,78 @@ body.gui-visible .lil-gui {
         font-size: 1.8rem;
         letter-spacing: 4px;
     }
-    
+
     p#overlay-subtitle {
         font-size: 0.9rem;
     }
-    
+
     #debug-panel {
         font-size: 10px;
         padding: 8px 12px;
     }
-    
+
     #keyboard-hints {
-        display: none; /* No keyboard on mobile */
+        display: none;
+        /* No keyboard on mobile */
     }
+}
+
+/* =============================================================================
+   TEXT OVERLAY
+   ============================================================================= */
+
+#text-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 10;
+}
+
+#text-overlay.pos-top {
+    align-items: flex-start;
+    padding-top: 8vh;
+}
+
+#text-overlay.pos-center {
+    align-items: center;
+}
+
+#text-overlay.pos-bottom {
+    align-items: flex-end;
+    padding-bottom: 8vh;
+}
+
+#custom-text {
+    font-family: 'Great Vibes', 'Pinyon Script', cursive;
+    font-size: clamp(3rem, 8vw, 8rem);
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.05em;
+    line-height: 1.4;
+    max-width: 90%;
+    animation: textGlow 4s ease-in-out infinite alternate;
+    white-space: pre-line;
+}
+
+@keyframes textGlow {
+    0% {
+        text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        opacity: 0.85;
+    }
+
+    100% {
+        text-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+        opacity: 1;
+    }
+}
+
+#custom-text:empty {
+    display: none;
 }
