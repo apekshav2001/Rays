@@ -170,7 +170,8 @@
             fire: { color1: '#ff4500', color2: '#ffd700' },
             aurora: { color1: '#00d4ff', color2: '#7b2ff7' },
             midnight: { color1: '#1a1a2e', color2: '#4a00e0' },
-            cherry: { color1: '#ff0844', color2: '#ffb199' }
+            cherry: { color1: '#ff0844', color2: '#ffb199' },
+            universe: { color1: '#ffffff', color2: '#e6f1ff' }
         };
 
         // Apply theme or custom colors
@@ -398,7 +399,7 @@
                 vertexShader,
                 fragmentShader,
                 uniforms: {
-                    uTime: { value: 0 },
+                    uTime: { value: customTime },
                     uAmbient: { value: 1.0 },
                     uMotion: { value: CONFIG.static ? 0.0 : CONFIG.motion },
                     uColorA: { value: new THREE.Color(CONFIG.color1) },
@@ -412,6 +413,15 @@
 
             particleSystem = new THREE.Points(geometry, material);
             scene.add(particleSystem);
+        }
+
+        function cleanupParticles() {
+            if (particleSystem) {
+                particleSystem.geometry.dispose();
+                particleSystem.material.dispose();
+                scene.remove(particleSystem);
+                particleSystem = null;
+            }
         }
 
         function setupPostProcessing() {
@@ -470,11 +480,7 @@
 
         // Cleanup function for proper WebGL disposal
         function cleanup() {
-            if (particleSystem) {
-                particleSystem.geometry.dispose();
-                particleSystem.material.dispose();
-                scene.remove(particleSystem);
-            }
+            cleanupParticles();
             if (renderer) {
                 renderer.dispose();
                 renderer.forceContextLoss();
@@ -506,14 +512,16 @@
 
             switch (name) {
                 case 'particles':
-                    // Would need to rebuild particle system
+                    CONFIG.particles = parseInt(val);
+                    cleanupParticles();
+                    setupParticles();
                     break;
                 case 'fps':
                     CONFIG.fps = parseInt(val);
                     break;
                 case 'theme':
                     // Lively sends dropdown index, convert to theme name
-                    const themeList = ['ocean', 'sunset', 'forest', 'cosmic', 'fire', 'aurora', 'midnight', 'cherry'];
+                    const themeList = ['ocean', 'sunset', 'forest', 'cosmic', 'fire', 'aurora', 'midnight', 'cherry', 'universe'];
                     const themeName = typeof val === 'number' ? themeList[val] : val;
                     if (THEMES[themeName]) {
                         CONFIG.color1 = THEMES[themeName].color1;
@@ -524,6 +532,22 @@
                     break;
                 case 'bloom':
                     CONFIG.bloom = val;
+                    if (composer) {
+                        // We don't easily toggle the whole composer logic here without more complexity,
+                        // but we can check CONFIG.bloom in the animation loop (which we already do).
+                    }
+                    break;
+                case 'bloomStrength':
+                    CONFIG.bloomStrength = parseFloat(val);
+                    if (composer && composer.passes[1]) {
+                        composer.passes[1].strength = CONFIG.bloomStrength;
+                    }
+                    break;
+                case 'size':
+                    CONFIG.baseSize = parseFloat(val);
+                    if (particleSystem) {
+                        particleSystem.material.uniforms.uSizeMult.value = CONFIG.baseSize;
+                    }
                     break;
                 case 'speed':
                     CONFIG.speed = parseFloat(val);
